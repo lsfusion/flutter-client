@@ -92,6 +92,8 @@ class _WebViewPageState extends State<WebViewPage> {
     switch (cmd) {
       case 'sendTCP':
         return await sendTCP(arguments[0], arguments[1], arguments[2], arguments[3]);
+      case 'sendUDP':
+        return await sendUDP(arguments[0], arguments[1], arguments[2]); 
       case 'readFile':
         return await readFile(arguments[0]);
       case 'deleteFile':

@@ -46,6 +46,22 @@ Future<Map<String, dynamic>> sendTCP(
   }
 }
 
+Future<Map<String, dynamic>> sendUDP(
+  String host,
+  int port,
+  String fileBytes,
+) async {
+  try {
+    final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+    socket.send(base64Decode(fileBytes), InternetAddress(host), port);
+    socket.close();
+
+    return {'result': null};
+  } catch (e) {
+    return {'result': base64Encode(utf8.encode(e.toString()))};
+  }
+}
+
 Future<Map<String, dynamic>> readFile(String path) async {
   try {
     final file = File(path);
