@@ -58,7 +58,9 @@ class _WebViewPageState extends State<WebViewPage> {
       ..addJavaScriptChannel(
         'Flutter',
         onMessageReceived: (JavaScriptMessage message) async {
-          _flutterWebViewController!.runJavaScript(await execute(message.message));
+          _flutterWebViewController!.runJavaScript(
+            await execute(message.message),
+          );
         },
       )
       ..loadRequest(Uri.parse(_currentUrl));
@@ -68,11 +70,7 @@ class _WebViewPageState extends State<WebViewPage> {
     _windowsWebViewController = wv.WebviewController();
     await _windowsWebViewController!.initialize();
     _windowsWebViewController!.webMessage.listen((message) async {
-      try {
         _windowsWebViewController!.executeScript(await execute(message));
-      } catch (e) {
-        debugPrint('Failed: $e');
-      }
     });
     await _windowsWebViewController!.loadUrl(_currentUrl);
     setState(() {
@@ -80,20 +78,26 @@ class _WebViewPageState extends State<WebViewPage> {
     });
   }
 
-  Future<String> execute(message) async{
+  Future<String> execute(message) async {
     final data = jsonDecode(message);
     final cmd = data['command'];
     final arguments = data['arguments'] as List<dynamic>;
     final id = data['id'];
 
     final result = await executeCommand(cmd, arguments);
-    final safeResult = jsonEncode(result);
-
-    return "window.flutterCallback('$cmd', $safeResult, '$id');";
+    return "window.flutterCallback('$cmd', ${jsonEncode(result)}, '$id');";
   }
 
-  Future<String?> executeCommand(String cmd, List<dynamic> arguments) async {
+  Future<Map<String, dynamic>> executeCommand(String cmd, List<dynamic> arguments) async {
     switch (cmd) {
+      case 'sendTCP':
+        return await sendTCP(arguments[0], arguments[1], arguments[2], arguments[3]);
+      case 'readFile':
+        return await readFile(arguments[0]);
+      case 'deleteFile':
+        return await deleteFile(arguments[0]);
+      case 'fileExists':
+      return await fileExists(arguments[0]);
       case 'makeDir':
         return await makeDir(arguments[0]);
       case 'moveFile':
@@ -101,10 +105,7 @@ class _WebViewPageState extends State<WebViewPage> {
       case 'copyFile':
         return await copyFile(arguments[0], arguments[1]);
       case 'listFiles':
-        return await listFiles(
-          arguments[0],
-          arguments[1].toString().toLowerCase() == 'true',
-        );
+        return await listFiles(arguments[0], arguments[1]);
       case 'ping':
         return await ping(arguments[0]);
       default:

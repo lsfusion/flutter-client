@@ -1,41 +1,134 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
+Future<Map<String, dynamic>> sendTCP(
+  String host,
+  int port,
+  String fileBytes,
+  int timeoutMillis,
+) async {
+  try {
+    final socket = await Socket.connect(
+      host,
+      port,
+      timeout: Duration(milliseconds: timeoutMillis),
+    );
+    socket.add(base64Decode(fileBytes));
+    await socket.flush();
+    final completer = Completer<Uint8List>();
+    final response = BytesBuilder();
+    socket.listen(
+      response.add,
+      onDone: () {
+        completer.complete(response.toBytes());
+        socket.destroy();
+      },
+      onError: (error) {
+        completer.completeError(error);
+        socket.destroy();
+      },
+      cancelOnError: true,
+    );
 
-Future<String?> makeDir(String path) async {
+    final Uint8List resultBytes = await completer.future.timeout(
+      Duration(milliseconds: timeoutMillis),
+      onTimeout: () {
+        socket.destroy();
+        throw 'TCP read timeout';
+      },
+    );
+
+    return { 'result': base64Encode(resultBytes) };
+  } catch (e) {
+    return { 'result': base64Encode(utf8.encode(e.toString())) };
+  }
+}
+
+Future<Map<String, dynamic>> readFile(String path) async {
+  try {
+    final file = File(path);
+    if (!await file.exists()) {
+      return {'error': 'File does not exist'};
+    }
+    final bytes = await file.readAsBytes();
+    final base64Content = base64Encode(bytes);
+    return {'result': base64Content};
+  } catch (e) {
+    return {'error': 'Error reading file: $e'};
+  }
+}
+
+Future<Map<String, dynamic>> deleteFile(String path) async {
+  try {
+    final type = FileSystemEntity.typeSync(path);
+    if (type == FileSystemEntityType.notFound) {
+      return {'result': 'File or directory does not exist: $path'};
+    }
+
+    final entity = FileSystemEntity.isDirectorySync(path)
+        ? Directory(path)
+        : File(path);
+
+    await entity.delete(recursive: true);
+    return {'result': null};
+  } catch (e) {
+    return {'result': 'Error deleting file or directory: $e'};
+  }
+}
+
+Future<Map<String, dynamic>> fileExists(String path) async {
+  try {
+    final entity = FileSystemEntity.typeSync(path);
+    if (entity == FileSystemEntityType.notFound) {
+      return {'result': false};
+    }
+    return {'result': true};
+  } catch (e) {
+    return {'result': false};
+  }
+}
+
+Future<Map<String, dynamic>> makeDir(String path) async {
   try {
     final dir = Directory(path);
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
-    return null;
+    return {'result': true};
   } catch (e) {
-    return 'Error: $e';
+    return {'error': 'Error making dir: $e'};
   }
 }
 
-Future<String?> moveFile(String sourcePath, String destinationPath) async {
+Future<Map<String, dynamic>> moveFile(
+  String sourcePath,
+  String destinationPath,
+) async {
   try {
     final sourceFile = File(sourcePath);
     await sourceFile.rename(destinationPath);
-    return null;
+    return {'result': null};
   } catch (e) {
-    return 'Error: $e';
+    return {'result': 'Error moving file: $e'};
   }
 }
 
-Future<String?> copyFile(String sourcePath, String destinationPath) async {
+Future<Map<String, dynamic>> copyFile(
+  String sourcePath,
+  String destinationPath,
+) async {
   try {
     final sourceFile = File(sourcePath);
     await sourceFile.copy(destinationPath);
-    return null;
+    return {'result': null};
   } catch (e) {
-    return 'Error: $e';
+    return {'result': 'Error copying file: $e'};
   }
 }
 
-Future<String> listFiles(String source, bool recursive) async {
+Future<Map<String, dynamic>> listFiles(String source, bool recursive) async {
   final List<FileInfo> results = [];
 
   Future<void> listDir(Directory dir) async {
@@ -62,7 +155,7 @@ Future<String> listFiles(String source, bool recursive) async {
     await listDir(dir);
   }
 
-  return jsonEncode(results.map((e) => e.toJson()).toList());
+  return {'result': results.map((e) => e.toJson()).toList()};
 }
 
 class FileInfo {
@@ -86,9 +179,8 @@ class FileInfo {
   };
 }
 
-Future<String?> ping(String host) async {
+Future<Map<String, dynamic>> ping(String host) async {
   try {
-    debugPrint('ping start');
     host = Uri.parse(host).host;
     final socket = await Socket.connect(
       host,
@@ -96,9 +188,8 @@ Future<String?> ping(String host) async {
       timeout: const Duration(seconds: 5),
     );
     socket.destroy();
-    debugPrint('ping end');
-    return null;
+    return {'result': null};
   } catch (e) {
-    return 'Host is not reachable: $e';
+    return {'result': 'Host is not reachable: $e'};
   }
 }
