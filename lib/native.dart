@@ -1,18 +1,37 @@
 import 'dart:convert';
 import 'dart:io';
 
-Future<String> ping(String host) async {
+import 'package:flutter/material.dart';
+
+Future<String?> makeDir(String path) async {
   try {
-    host = Uri.parse(host).host;
-    final socket = await Socket.connect(
-      host,
-      80,
-      timeout: const Duration(seconds: 5),
-    );
-    socket.destroy();
-    return 'OK';
+    final dir = Directory(path);
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    return null;
   } catch (e) {
-    return 'Host is not reachable: $e';
+    return 'Error: $e';
+  }
+}
+
+Future<String?> moveFile(String sourcePath, String destinationPath) async {
+  try {
+    final sourceFile = File(sourcePath);
+    await sourceFile.rename(destinationPath);
+    return null;
+  } catch (e) {
+    return 'Error: $e';
+  }
+}
+
+Future<String?> copyFile(String sourcePath, String destinationPath) async {
+  try {
+    final sourceFile = File(sourcePath);
+    await sourceFile.copy(destinationPath);
+    return null;
+  } catch (e) {
+    return 'Error: $e';
   }
 }
 
@@ -65,4 +84,21 @@ class FileInfo {
     'modifiedDateTime': modifiedDateTime.toIso8601String(),
     'fileSize': fileSize,
   };
+}
+
+Future<String?> ping(String host) async {
+  try {
+    debugPrint('ping start');
+    host = Uri.parse(host).host;
+    final socket = await Socket.connect(
+      host,
+      80,
+      timeout: const Duration(seconds: 5),
+    );
+    socket.destroy();
+    debugPrint('ping end');
+    return null;
+  } catch (e) {
+    return 'Host is not reachable: $e';
+  }
 }

@@ -37,7 +37,7 @@ class _WebViewPageState extends State<WebViewPage> {
   bool _windowsControllerReady = false;
 
   bool _showAddressBar = false;
-  String _currentUrl = 'http://192.168.1.26:8888/main';
+  String _currentUrl = 'http://192.168.0.51:8888/main';
 
   bool get isWindows => Platform.isWindows;
   bool get isMobile => Platform.isAndroid || Platform.isIOS;
@@ -58,7 +58,7 @@ class _WebViewPageState extends State<WebViewPage> {
       ..addJavaScriptChannel(
         'Flutter',
         onMessageReceived: (JavaScriptMessage message) async {
-          _flutterWebViewController!.runJavaScript(execute(message.message));
+          _flutterWebViewController!.runJavaScript(await execute(message.message));
         },
       )
       ..loadRequest(Uri.parse(_currentUrl));
@@ -69,7 +69,7 @@ class _WebViewPageState extends State<WebViewPage> {
     await _windowsWebViewController!.initialize();
     _windowsWebViewController!.webMessage.listen((message) async {
       try {
-        _windowsWebViewController!.executeScript(execute(message));
+        _windowsWebViewController!.executeScript(await execute(message));
       } catch (e) {
         debugPrint('Failed: $e');
       }
@@ -80,26 +80,33 @@ class _WebViewPageState extends State<WebViewPage> {
     });
   }
 
-  String execute(message) {
+  Future<String> execute(message) async{
     final data = jsonDecode(message);
     final cmd = data['command'];
     final arguments = data['arguments'] as List<dynamic>;
     final id = data['id'];
 
-    final result = jsonEncode(executeCommand(cmd, arguments));
+    final result = await executeCommand(cmd, arguments);
+    final safeResult = jsonEncode(result);
 
-    return "window.flutterCallback('$cmd', $result, '$id');";
+    return "window.flutterCallback('$cmd', $safeResult, '$id');";
   }
 
-  Future<String> executeCommand(String cmd, List<dynamic> arguments) async {
+  Future<String?> executeCommand(String cmd, List<dynamic> arguments) async {
     switch (cmd) {
-      case 'ping':
-        return await ping(arguments[0]);
+      case 'makeDir':
+        return await makeDir(arguments[0]);
+      case 'moveFile':
+        return await moveFile(arguments[0], arguments[1]);
+      case 'copyFile':
+        return await copyFile(arguments[0], arguments[1]);
       case 'listFiles':
         return await listFiles(
           arguments[0],
           arguments[1].toString().toLowerCase() == 'true',
         );
+      case 'ping':
+        return await ping(arguments[0]);
       default:
         throw UnsupportedError('Unknown command: $cmd');
     }
