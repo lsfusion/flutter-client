@@ -2,6 +2,16 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:convert';
+import 'dart:ffi';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
+import 'package:win32/win32.dart';
+import 'package:ffi/ffi.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:flutter_libserialport/flutter_libserialport.dart';
 
 Future<Map<String, dynamic>> sendTCP(
   String host,
@@ -40,9 +50,9 @@ Future<Map<String, dynamic>> sendTCP(
       },
     );
 
-    return { 'result': base64Encode(resultBytes) };
+    return {'result': base64Encode(resultBytes)};
   } catch (e) {
-    return { 'result': base64Encode(utf8.encode(e.toString())) };
+    return {'result': base64Encode(utf8.encode(e.toString()))};
   }
 }
 
@@ -193,6 +203,177 @@ class FileInfo {
     'modifiedDateTime': modifiedDateTime.toIso8601String(),
     'fileSize': fileSize,
   };
+}
+
+Future<Map<String, dynamic>> writeFile(String url, String path) async {
+  try {
+    final uri = Uri.parse(url);
+    final httpClient = HttpClient()..autoUncompress = true;
+
+    final request = await httpClient.getUrl(uri);
+    request.followRedirects = true;
+    request.headers.set('User-Agent', 'Mozilla/5.0 (compatible; Dart)');
+
+    final response = await request.close();
+    if (response.statusCode != 200) {
+      return {
+        'result': base64Encode(
+          utf8.encode('HTTP error: ${response.statusCode}'),
+        ),
+      };
+    }
+
+    final bytes = await consolidateHttpClientResponseBytes(response);
+    if (bytes.isEmpty) {
+      return {'result': base64Encode(utf8.encode('Downloaded 0 bytes'))};
+    }
+
+    final file = File(path);
+    await file.writeAsBytes(bytes);
+
+    return {'result': null};
+  } catch (e) {
+    return {'result': base64Encode(utf8.encode('Exception: $e'))};
+  }
+}
+
+Future<Map<String, dynamic>> getAvailablePrinters() async {
+  try {
+    final printers = await Printing.listPrinters();
+    final names = printers.map((p) => p.name).join('\n');
+    return {'result': names};
+  } catch (e) {
+    return {'result': 'Failed to list printers: $e'};
+  }
+}
+
+Future<Map<String, dynamic>> print(
+  String? base64,
+  String? path,
+  String? text,
+  String? printerName,
+) async {
+  try {
+    Uint8List fileBytes;
+    if (base64 != null) {
+      fileBytes = base64Decode(base64);
+    } else if (path != null) {
+      final file = File(path);
+      if (!(await file.exists())) {
+        return {'result': 'File does not exist: $path'};
+      }
+      fileBytes = await file.readAsBytes();
+    } else if(text != null) {
+      final pdf = pw.Document();
+      pdf.addPage(
+        pw.Page(
+          build: (context) => pw.Text(text),
+        ),
+      );
+      fileBytes = await pdf.save();
+    }else {
+      return {'result': 'No file path or base64 or text provided'};
+    }
+
+    final printers = await Printing.listPrinters();
+    if (printers.isEmpty) {
+      return {'result': 'No available printers found'};
+    }
+
+    Printer? targetPrinter = printers
+        .where((p) => p.name == printerName)
+        .cast<Printer?>()
+        .firstOrNull;
+    targetPrinter ??= printers
+        .where((p) => p.isDefault)
+        .cast<Printer?>()
+        .firstOrNull;
+
+    if (targetPrinter == null) {
+      return {'result': 'No available printers found'};
+    }
+
+    Printing.directPrintPdf(
+      printer: targetPrinter,
+      onLayout: (_) async => fileBytes,
+    );
+
+    return {'result': null};
+  } catch (e) {
+    return {'result': 'Failed to print file: $e'};
+  }
+}
+
+Future<Map<String, dynamic>> runCommand(String command) async {
+  final result = await Process.run(command, List.empty());
+  return {
+    'cmdOut': result.stdout.toString().trim(),
+    'cmdErr': result.stderr.toString().trim(),
+    'exitValue': result.exitCode,
+  };
+}
+
+Future<Map<String, dynamic>> writeToSocket(
+  String host,
+  int port,
+  String text,
+  String charset,
+) async {
+  try {
+    final socket = await Socket.connect(host, port);
+    Encoding encoding;
+
+    switch (charset.toLowerCase()) {
+      case 'utf8':
+      case 'utf-8':
+        encoding = utf8;
+        break;
+      case 'ascii':
+        encoding = ascii;
+        break;
+      case 'latin1':
+      case 'iso-8859-1':
+        encoding = latin1;
+        break;
+      default:
+        return {'result': 'Unsupported charset: $charset'};
+    }
+
+    socket.add(encoding.encode(text));
+    await socket.flush();
+    await socket.close();
+    
+    return {'result': null};
+
+  } catch (e) {
+      return {'result': 'Socket error: $e'};
+  }
+}
+
+Future<Map<String, dynamic>> writeToComPort(String portName, int baudRate, String base64) async {
+  try {
+    final port = SerialPort(portName);
+    if (!port.openReadWrite()) {
+      return {'result': 'Failed to open port $portName'};
+    }
+
+    final config = SerialPortConfig();
+    config.baudRate = baudRate;
+    port.config = config;
+
+    final data = base64Decode(base64);
+    final bytesWritten = port.write(data);
+
+    port.close();
+
+    if (bytesWritten == data.length) {
+      return {'result': null};
+    } else {
+      return {'result': 'Failed to write all bytes to port'};
+    }
+  } catch (e) {
+    return {'result': 'Error writing to COM port: $e'};
+  }
 }
 
 Future<Map<String, dynamic>> ping(String host) async {

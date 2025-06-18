@@ -37,7 +37,7 @@ class _WebViewPageState extends State<WebViewPage> {
   bool _windowsControllerReady = false;
 
   bool _showAddressBar = false;
-  String _currentUrl = 'http://192.168.0.51:8888/main';
+  String _currentUrl = 'http://192.168.0.19:8888/main';
 
   bool get isWindows => Platform.isWindows;
   bool get isMobile => Platform.isAndroid || Platform.isIOS;
@@ -108,6 +108,19 @@ class _WebViewPageState extends State<WebViewPage> {
         return await copyFile(arguments[0], arguments[1]);
       case 'listFiles':
         return await listFiles(arguments[0], arguments[1]);
+      case 'writeFile':
+        return await writeFile(arguments[0], arguments[1]);
+      case 'getAvailablePrinters':
+        return await getAvailablePrinters();
+      case 'print':
+        return await print(arguments[0], arguments[1], arguments[2], arguments[3]);
+      case 'runCommand':
+        return await runCommand(arguments[0]);
+      case 'writeToSocket':
+        return await writeToSocket(arguments[0], arguments[1], arguments[2], arguments[3]);
+      case 'writeToComPort':
+        return await writeToComPort(arguments[0], arguments[1], arguments[2]);  
+        
       case 'ping':
         return await ping(arguments[0]);
       default:
