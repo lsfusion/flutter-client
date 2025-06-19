@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_windows/webview_windows.dart' as wv;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'address_bar.dart';
 import 'native.dart';
@@ -17,9 +18,9 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return const MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: const WebViewPage(),
+      home: WebViewPage(),
     );
   }
 }
@@ -37,19 +38,36 @@ class _WebViewPageState extends State<WebViewPage> {
   bool _windowsControllerReady = false;
 
   bool _showAddressBar = false;
+  bool _isLoading = false;
+  bool _isReady = false;
+
   String _currentUrl = 'http://192.168.0.19:8888/main';
 
   bool get isWindows => Platform.isWindows;
-  bool get isMobile => Platform.isAndroid || Platform.isIOS;
 
   @override
   void initState() {
     super.initState();
+    _loadLastUrl();
     if (isWindows) {
       _initWindowsWebView();
-    } else {
+    }
+  }
+
+  Future<void> _loadLastUrl() async {
+    final prefs = await SharedPreferences.getInstance();
+    final history = prefs.getStringList('history') ?? [];
+    if (history.isNotEmpty) {
+      _currentUrl = history.last;
+    }
+
+    if (!isWindows) {
       _initFlutterWebView();
     }
+
+    setState(() {
+      _isReady = true;
+    });
   }
 
   void _initFlutterWebView() {
@@ -63,6 +81,14 @@ class _WebViewPageState extends State<WebViewPage> {
           );
         },
       )
+      ..setNavigationDelegate(NavigationDelegate(
+        onPageStarted: (_) {
+          setState(() => _isLoading = true);
+        },
+        onPageFinished: (_) {
+          setState(() => _isLoading = false);
+        },
+      ))
       ..loadRequest(Uri.parse(_currentUrl));
   }
 
@@ -70,7 +96,12 @@ class _WebViewPageState extends State<WebViewPage> {
     _windowsWebViewController = wv.WebviewController();
     await _windowsWebViewController!.initialize();
     _windowsWebViewController!.webMessage.listen((message) async {
-        _windowsWebViewController!.executeScript(await execute(message));
+      _windowsWebViewController!.executeScript(await execute(message));
+    });
+    _windowsWebViewController!.loadingState.listen((state) {
+      setState(() {
+        _isLoading = state == wv.LoadingState.loading;
+      });
     });
     await _windowsWebViewController!.loadUrl(_currentUrl);
     setState(() {
@@ -93,13 +124,13 @@ class _WebViewPageState extends State<WebViewPage> {
       case 'sendTCP':
         return await sendTCP(arguments[0], arguments[1], arguments[2], arguments[3]);
       case 'sendUDP':
-        return await sendUDP(arguments[0], arguments[1], arguments[2]); 
+        return await sendUDP(arguments[0], arguments[1], arguments[2]);
       case 'readFile':
         return await readFile(arguments[0]);
       case 'deleteFile':
         return await deleteFile(arguments[0]);
       case 'fileExists':
-      return await fileExists(arguments[0]);
+        return await fileExists(arguments[0]);
       case 'makeDir':
         return await makeDir(arguments[0]);
       case 'moveFile':
@@ -119,8 +150,7 @@ class _WebViewPageState extends State<WebViewPage> {
       case 'writeToSocket':
         return await writeToSocket(arguments[0], arguments[1], arguments[2], arguments[3]);
       case 'writeToComPort':
-        return await writeToComPort(arguments[0], arguments[1], arguments[2]);  
-        
+        return await writeToComPort(arguments[0], arguments[1], arguments[2]);
       case 'ping':
         return await ping(arguments[0]);
       default:
@@ -130,6 +160,12 @@ class _WebViewPageState extends State<WebViewPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_isReady) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return GestureDetector(
       onVerticalDragEnd: (details) {
         if (details.primaryVelocity != null) {
@@ -154,6 +190,7 @@ class _WebViewPageState extends State<WebViewPage> {
                   padding: const EdgeInsets.all(8.0),
                   child: AddressBar(
                     initialUrl: _currentUrl,
+                    isLoading: _isLoading,
                     onNavigate: (url) {
                       setState(() {
                         _currentUrl = url;
@@ -170,13 +207,12 @@ class _WebViewPageState extends State<WebViewPage> {
             ),
             Expanded(
               child: isWindows
-                  ? (_windowsControllerReady &&
-                            _windowsWebViewController != null
-                        ? wv.Webview(_windowsWebViewController!)
-                        : const Center(child: CircularProgressIndicator()))
+                  ? (_windowsControllerReady && _windowsWebViewController != null
+                      ? wv.Webview(_windowsWebViewController!)
+                      : const Center(child: CircularProgressIndicator()))
                   : (_flutterWebViewController != null
-                        ? WebViewWidget(controller: _flutterWebViewController!)
-                        : const Center(child: CircularProgressIndicator())),
+                      ? WebViewWidget(controller: _flutterWebViewController!)
+                      : const Center(child: CircularProgressIndicator())),
             ),
           ],
         ),

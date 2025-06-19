@@ -4,11 +4,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AddressBar extends StatefulWidget {
   final String initialUrl;
   final void Function(String url) onNavigate;
+  final bool isLoading;
 
   const AddressBar({
     super.key,
     required this.initialUrl,
     required this.onNavigate,
+    required this.isLoading,
   });
 
   @override
@@ -77,10 +79,19 @@ class _AddressBarState extends State<AddressBar> {
           decoration: InputDecoration(
             labelText: 'Address',
             border: OutlineInputBorder(),
-            suffixIcon: IconButton(
-              icon: Icon(Icons.arrow_forward),
-              onPressed: () => _handleSubmit(controller.text),
-            ),
+            suffixIcon: widget.isLoading
+                ? Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : IconButton(
+                    icon: Icon(Icons.arrow_forward),
+                    onPressed: () => _handleSubmit(controller.text),
+                  ),
           ),
           onSubmitted: _handleSubmit,
         );
