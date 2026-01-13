@@ -41,7 +41,9 @@ class _WebViewPageState extends State<WebViewPage> {
   bool _isLoading = false;
   bool _isReady = false;
 
-  String _currentUrl = 'http://192.168.0.19:8888/main';
+  // String _currentUrl = 'http://192.168.1.44:8080/lsf';
+  // String _currentUrl = 'https://demo.lsfusion.org/mycompany/';
+  String _currentUrl = 'http://192.168.1.44:8888/main';
 
   bool get isWindows => Platform.isWindows;
 
