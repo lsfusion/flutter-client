@@ -2,14 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:convert';
-import 'dart:ffi';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
-import 'package:win32/win32.dart';
-import 'package:ffi/ffi.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:flutter_libserialport/flutter_libserialport.dart';
 
