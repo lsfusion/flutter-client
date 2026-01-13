@@ -13,6 +13,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        
+      - name: Install system dependencies
+        run: |
+          brew update
+          brew install automake libtool pkg-config
 
       - name: Setup Flutter
         uses: flutter-actions/setup-flutter@v4
