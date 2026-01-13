@@ -1,9 +1,10 @@
 name: Windows Build
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
+#  push:
+#    branches: [ main ]
+#  pull_request:
+  workflow_dispatch:
 
 jobs:
   build-windows:
@@ -12,7 +13,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -26,7 +27,7 @@ jobs:
         run: flutter build windows --release
 
       - name: Upload Windows build
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: windows-build
           path: build/windows/runner/Release/**
