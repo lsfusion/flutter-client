@@ -1,0 +1,13 @@
+name: Android Build
+
+on:
+#  push:
+#    branches: [ main ]
+#  pull_request:
+  workflow_dispatch:
+
+jobs:
+  dummy:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Placeholder workflow"
