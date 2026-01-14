@@ -1,0 +1,22 @@
+name: Build All Platforms
+on:
+#  push:
+#    branches: [ main ]
+#  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux:
+    uses: ./.github/workflows/linux.yml
+
+  windows:
+    uses: ./.github/workflows/windows.yml
+
+  macos:
+    uses: ./.github/workflows/macos.yml
+
+  android:
+    uses: ./.github/workflows/android.yml
+
+  ios:
+    uses: ./.github/workflows/ios.yml
