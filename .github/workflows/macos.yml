@@ -27,6 +27,7 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
+        
       - name: Build macOS build
         run: flutter build macos --release
 

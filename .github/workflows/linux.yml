@@ -7,7 +7,38 @@ on:
   workflow_dispatch:
 
 jobs:
-  dummy:
+  build-linux:
+    name: Build Linux
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Placeholder workflow"
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Flutter
+        uses: flutter-actions/setup-flutter@v4
+        with:
+          channel: stable
+          version: latest
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang \
+            cmake \
+            ninja-build \
+            pkg-config \
+            libgtk-3-dev \
+            liblzma-dev
+          
+      - name: Install dependencies
+        run: flutter pub get
+        
+      - name: Build Linux build
+        run: flutter build linux --release
+
+      - name: Upload Linux build
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: build/linux/x64/release/bundle/**
