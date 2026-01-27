@@ -24,11 +24,39 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build Windows app
-        run: flutter build windows --release
+#      - name: Build Windows app
+#        run: flutter build windows --release
+
+      - name: Create MSIX Installer
+        run: dart run msix:create
+        shell: pwsh
+
+      - name: Setup CodeSignTool
+        run: |
+          mkdir CodeSignTool
+          curl -L https://www.ssl.com/download/ssl-com-codesigntool/ -o CodeSignTool.zip
+          Expand-Archive -Path CodeSignTool.zip -DestinationPath CodeSignTool
+          # The zip usually contains a versioned folder, let's try to find the jar
+          $jarPath = Get-ChildItem -Path CodeSignTool -Filter CodeSignTool.jar -Recurse | Select-Object -First 1
+          echo "CODESIGNTOOL_JAR=$($jarPath.FullName)" >> $env:GITHUB_ENV
+        shell: pwsh
+
+      - name: Sign MSIX with CodeSignTool
+        run: |
+          $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
+          java -jar "${{ env.CODESIGNTOOL_JAR }}" sign `
+            -username="${{ secrets.SS_USER_NAME }}" `
+            -password="${{ secrets.SS_USER_PASSWORD }}" `
+            -credential_id="${{ secrets.SS_CREDENTIAL_ID }}" `
+            -totp_secret="${{ secrets.SS_TOTP_SECRET }}" `
+            -input_file_path="$($msixPath.FullName)" `
+            -output_dir_path="build/windows/x64/runner/Release/signed"
+        shell: pwsh
 
       - name: Upload Windows build
         uses: actions/upload-artifact@v4
         with:
-          name: windows-build
-          path: build/windows/x64/runner/Release/**
+          name: windows-msix
+          path: |
+            build/windows/x64/runner/Release/*.msix
+            build/windows/x64/runner/Release/signed/*.msix
