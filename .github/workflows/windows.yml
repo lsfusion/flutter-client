@@ -34,10 +34,16 @@ jobs:
       - name: Setup CodeSignTool
         run: |
           mkdir CodeSignTool
-          curl -L https://www.ssl.com/download/ssl-com-codesigntool/ -o CodeSignTool.zip
+          $url = "https://www.ssl.com/download/codesigntool-for-windows/"
+          curl -L $url -o CodeSignTool.zip
+          if ((Get-Item CodeSignTool.zip).Length -lt 100000) {
+            throw "Downloaded file is too small, likely not the tool. Check the URL."
+          }
           Expand-Archive -Path CodeSignTool.zip -DestinationPath CodeSignTool
-          # The zip usually contains a versioned folder, let's try to find the jar
           $jarPath = Get-ChildItem -Path CodeSignTool -Filter CodeSignTool.jar -Recurse | Select-Object -First 1
+          if ($null -eq $jarPath) {
+            throw "CodeSignTool.jar not found in the extracted files."
+          }
           echo "CODESIGNTOOL_JAR=$($jarPath.FullName)" >> $env:GITHUB_ENV
         shell: pwsh
 
