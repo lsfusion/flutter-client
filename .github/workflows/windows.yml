@@ -44,19 +44,26 @@ jobs:
           if ($null -eq $jarPath) {
             throw "CodeSignTool JAR not found in the extracted files."
           }
+          # We need the directory where 'conf' and 'jar' folders are located
+          $toolRoot = $jarPath.Directory.Parent.FullName
           echo "CODESIGNTOOL_JAR=$($jarPath.FullName)" >> $env:GITHUB_ENV
+          echo "CODESIGNTOOL_ROOT=$toolRoot" >> $env:GITHUB_ENV
         shell: pwsh
 
       - name: Sign MSIX with CodeSignTool
         run: |
           $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
+          $absoluteMsixPath = $msixPath.FullName
+          $absoluteOutputDir = Join-Path (Get-Location).Path "build/windows/x64/runner/Release/signed"
+          
+          cd "${{ env.CODESIGNTOOL_ROOT }}"
           java -jar "${{ env.CODESIGNTOOL_JAR }}" sign `
             -username="${{ secrets.SS_USER_NAME }}" `
             -password="${{ secrets.SS_USER_PASSWORD }}" `
             -credential_id="${{ secrets.SS_CREDENTIAL_ID }}" `
             -totp_secret="${{ secrets.SS_TOTP_SECRET }}" `
-            -input_file_path="$($msixPath.FullName)" `
-            -output_dir_path="build/windows/x64/runner/Release/signed"
+            -input_file_path="$absoluteMsixPath" `
+            -output_dir_path="$absoluteOutputDir"
         shell: pwsh
 
       - name: Upload Windows build
