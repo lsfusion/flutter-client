@@ -55,6 +55,7 @@ jobs:
           $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
           $absoluteMsixPath = $msixPath.FullName
           $absoluteOutputDir = Join-Path (Get-Location).Path "build/windows/x64/runner/Release/signed"
+          New-Item -ItemType Directory -Force -Path $absoluteOutputDir
           
           cd "${{ env.CODESIGNTOOL_ROOT }}"
           java -jar "${{ env.CODESIGNTOOL_JAR }}" sign `
