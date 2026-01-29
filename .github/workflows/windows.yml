@@ -31,6 +31,17 @@ jobs:
         run: dart run msix:create
         shell: pwsh
 
+      - name: Verify signtool exists
+        run: |
+          $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe"
+          if (Test-Path $signtool) {
+            Write-Host "Signtool found at $signtool"
+          } else {
+            Write-Host "Signtool NOT found at $signtool. Searching..."
+            Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "signtool.exe" -Recurse | Select-Object -First 5
+          }
+        shell: pwsh
+
       - name: Setup eSigner CKA
         run: |
           $url = "https://www.ssl.com/download/ssl-com-esigner-cka/"
@@ -42,24 +53,32 @@ jobs:
           if ($null -eq $exePath) { throw "eSignerCKA EXE not found." }
           
           # Run the EXE installer silently
-          # Usually, Inno Setup or similar use /VERYSILENT /SUPPRESSMSGBOXES
-          # But for SSL.com it might be different. Let's try common flags.
           Write-Host "Installing $($exePath.FullName)..."
-          Start-Process -FilePath $exePath.FullName -ArgumentList "/S", "/v/qn" -Wait
+          # SSL.com eSigner CKA uses /S for silent install. 
+          # We use Start-Process with -Wait. If it hangs, it might be due to a prompt.
+          # According to SSL.com docs, /S should be enough.
+          $process = Start-Process -FilePath $exePath.FullName -ArgumentList "/S" -PassThru -Wait
+          
+          # Wait a bit more just in case
+          Start-Sleep -Seconds 60
           
           # Add eSignerCKA to PATH
-          # Check both Program Files and Program Files (x86)
           $ckaPath = "C:\Program Files\SSL.com\eSignerCKA"
           if (!(Test-Path $ckaPath)) {
             $ckaPath = "C:\Program Files (x86)\SSL.com\eSignerCKA"
           }
           
-          if (Test-Path $ckaPath) {
+          if (!(Test-Path $ckaPath)) {
+             # One more check - sometimes it installs to just SSL.com
+             $ckaPath = Get-ChildItem -Path "C:\Program Files", "C:\Program Files (x86)" -Filter "eSignerCKA" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+          }
+
+          if ($ckaPath -and (Test-Path $ckaPath)) {
             Write-Host "eSignerCKA installed at $ckaPath"
             echo "$ckaPath" >> $env:GITHUB_PATH
           } else {
             # Debug: show where it might have been installed
-            Get-ChildItem -Path "C:\Program Files" -Filter "*SSL*" -Recurse -Depth 2
+            Get-ChildItem -Path "C:\Program Files", "C:\Program Files (x86)" -Filter "*SSL*" -Recurse -Depth 2 -ErrorAction SilentlyContinue
             throw "eSignerCKA installation failed. Directory not found."
           }
         shell: pwsh
