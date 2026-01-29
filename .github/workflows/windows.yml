@@ -66,20 +66,9 @@ jobs:
             Get-Content "install.log" | Select-Object -Last 20
           }
           
-          # Wait a bit more just in case
-          Start-Sleep -Seconds 60
-          
           # Add eSignerCKA to PATH
-          $ckaPath = "C:\Program Files\SSL.com\eSignerCKA"
-          if (!(Test-Path $ckaPath)) {
-            $ckaPath = "C:\Program Files (x86)\SSL.com\eSignerCKA"
-          }
+          $ckaPath = "C:\Program Files (x86)\SSL Corp eSigner CKA"
           
-          if (!(Test-Path $ckaPath)) {
-             # One more check - sometimes it installs to just SSL.com
-             $ckaPath = Get-ChildItem -Path "C:\Program Files", "C:\Program Files (x86)" -Filter "eSignerCKA" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
-          }
-
           if ($ckaPath -and (Test-Path $ckaPath)) {
             Write-Host "eSignerCKA installed at $ckaPath"
             echo "$ckaPath" >> $env:GITHUB_PATH
