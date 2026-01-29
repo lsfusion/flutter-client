@@ -82,8 +82,9 @@ jobs:
       - name: Sign MSIX with eSigner CKA
         run: |
           # Config and Login
-          eSignerCKA.exe config -mode manual -set_path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe"
-          eSignerCKA.exe login `
+          $ckaExe = "C:\Program Files (x86)\SSL Corp eSigner CKA\eSignerCKA.exe"
+          & $ckaExe config -mode manual -set_path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe"
+          & $ckaExe login `
             -username "${{ secrets.SS_USER_NAME }}" `
             -password "${{ secrets.SS_USER_PASSWORD }}" `
             -credential_id "${{ secrets.SS_CREDENTIAL_ID }}" `
@@ -106,7 +107,7 @@ jobs:
           & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /f "${{ secrets.SS_CREDENTIAL_ID }}" /csp "SSL.com KSP" /kc "${{ secrets.SS_USER_NAME }}" "$signedMsixPath"
           
           # Logout
-          eSignerCKA.exe logout
+          & $ckaExe logout
         shell: pwsh
 
       - name: Upload Windows build
