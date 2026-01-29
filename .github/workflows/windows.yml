@@ -31,40 +31,51 @@ jobs:
         run: dart run msix:create
         shell: pwsh
 
-      - name: Setup CodeSignTool
+      - name: Setup eSigner CKA
         run: |
-          mkdir CodeSignTool
-          $url = "https://www.ssl.com/download/codesigntool-for-windows/"
-          curl.exe -L $url -o CodeSignTool.zip
-          if ((Get-Item CodeSignTool.zip).Length -lt 100000) {
-            throw "Downloaded file is too small, likely not the tool. Check the URL."
+          $url = "https://www.ssl.com/download/ssl-com-esigner-cka/"
+          curl.exe -L $url -o eSignerCKA_Setup.zip
+          Expand-Archive -Path eSignerCKA_Setup.zip -DestinationPath eSignerCKA_Setup
+          $msiPath = Get-ChildItem -Path eSignerCKA_Setup -Filter "*.msi" -Recurse | Select-Object -First 1
+          Start-Process msiexec.exe -ArgumentList "/i", "`"$($msiPath.FullName)`"", "/quiet", "/norestart" -Wait
+          
+          # Add eSignerCKA to PATH
+          $ckaPath = "C:\Program Files\SSL.com\eSignerCKA"
+          if (Test-Path $ckaPath) {
+            echo "$ckaPath" >> $env:GITHUB_PATH
+          } else {
+            throw "eSignerCKA installation failed."
           }
-          Expand-Archive -Path CodeSignTool.zip -DestinationPath CodeSignTool
-          $jarPath = Get-ChildItem -Path CodeSignTool -Filter "code_sign_tool-*.jar" -Recurse | Select-Object -First 1
-          if ($null -eq $jarPath) {
-            throw "CodeSignTool JAR not found in the extracted files."
-          }
-          # We need the directory where 'conf' and 'jar' folders are located
-          $toolRoot = $jarPath.Directory.Parent.FullName
-          echo "CODESIGNTOOL_JAR=$($jarPath.FullName)" >> $env:GITHUB_ENV
-          echo "CODESIGNTOOL_ROOT=$toolRoot" >> $env:GITHUB_ENV
         shell: pwsh
 
-      - name: Sign MSIX with CodeSignTool
+      - name: Sign MSIX with eSigner CKA
         run: |
-          $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
-          $absoluteMsixPath = $msixPath.FullName
-          $absoluteOutputDir = Join-Path (Get-Location).Path "build/windows/x64/runner/Release/signed"
-          New-Item -ItemType Directory -Force -Path $absoluteOutputDir
+          # Config and Login
+          eSignerCKA.exe config -mode manual -set_path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe"
+          eSignerCKA.exe login `
+            -username "${{ secrets.SS_USER_NAME }}" `
+            -password "${{ secrets.SS_USER_PASSWORD }}" `
+            -credential_id "${{ secrets.SS_CREDENTIAL_ID }}" `
+            -totp_secret "${{ secrets.SS_TOTP_SECRET }}" `
+            -save
           
-          cd "${{ env.CODESIGNTOOL_ROOT }}"
-          java -jar "${{ env.CODESIGNTOOL_JAR }}" sign `
-            -username="${{ secrets.SS_USER_NAME }}" `
-            -password="${{ secrets.SS_USER_PASSWORD }}" `
-            -credential_id="${{ secrets.SS_CREDENTIAL_ID }}" `
-            -totp_secret="${{ secrets.SS_TOTP_SECRET }}" `
-            -input_file_path="$absoluteMsixPath" `
-            -output_dir_path="$absoluteOutputDir"
+          $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
+          if ($null -eq $msixPath) { throw "MSIX file not found." }
+          $absoluteMsixPath = $msixPath.FullName
+          
+          $absoluteOutputDir = Join-Path (Get-Location).Path "build/windows/x64/runner/Release/signed"
+          if (!(Test-Path $absoluteOutputDir)) { New-Item -ItemType Directory -Force -Path $absoluteOutputDir }
+          $signedMsixPath = Join-Path $absoluteOutputDir $msixPath.Name
+          
+          # Copy to signed dir first because signtool signs in-place
+          Copy-Item -Path $absoluteMsixPath -Destination $signedMsixPath
+
+          # Sign with signtool
+          # We use signtool directly. eSignerCKA provides the KSP "SSL.com KSP".
+          & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /f "${{ secrets.SS_CREDENTIAL_ID }}" /csp "SSL.com KSP" /kc "${{ secrets.SS_USER_NAME }}" "$signedMsixPath"
+          
+          # Logout
+          eSignerCKA.exe logout
         shell: pwsh
 
       - name: Upload Windows build
