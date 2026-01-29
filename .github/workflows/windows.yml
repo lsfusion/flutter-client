@@ -33,12 +33,17 @@ jobs:
 
       - name: Verify signtool exists
         run: |
-          $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe"
+          $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
           if (Test-Path $signtool) {
             Write-Host "Signtool found at $signtool"
           } else {
             Write-Host "Signtool NOT found at $signtool. Searching..."
-            Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "signtool.exe" -Recurse | Select-Object -First 5
+            $found = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "signtool.exe" -Recurse | Select-Object -First 1
+            if ($found) {
+                Write-Host "Found at: $($found.FullName)"
+            } else {
+                throw "signtool.exe not found anywhere in Windows Kits"
+            }
           }
         shell: pwsh
 
@@ -54,12 +59,6 @@ jobs:
           
           # Run the EXE installer silently
           Write-Host "Installing $($exePath.FullName)..."
-          # SSL.com eSigner CKA uses Inno Setup.
-          # According to the help output, correct flags for silent install are:
-          # /VERYSILENT - completely silent
-          # /SUPPRESSMSGBOXES - no dialogs
-          # /NORESTART - do not reboot
-          # /SP- - skip "This will install..." prompt
           $process = Start-Process -FilePath $exePath.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/LOG=install.log" -PassThru -Wait
           
           if (Test-Path "install.log") {
@@ -69,27 +68,40 @@ jobs:
           # Add eSignerCKA to PATH
           $ckaPath = "C:\Program Files (x86)\SSL Corp eSigner CKA"
           
-          if ($ckaPath -and (Test-Path $ckaPath)) {
+          if (Test-Path $ckaPath) {
             Write-Host "eSignerCKA installed at $ckaPath"
             echo "$ckaPath" >> $env:GITHUB_PATH
           } else {
             # Debug: show where it might have been installed
-            Get-ChildItem -Path "C:\Program Files", "C:\Program Files (x86)" -Filter "*SSL*" -Recurse -Depth 2 -ErrorAction SilentlyContinue
+            Write-Host "Standard path not found. Searching for SSL folders..."
+            Get-ChildItem -Path "C:\Program Files (x86)" -Filter "*SSL*" | Select-Object FullName
             throw "eSignerCKA installation failed. Directory not found."
           }
         shell: pwsh
 
       - name: Sign MSIX with eSigner CKA
         run: |
-          # Config and Login
-          $ckaExe = 'C:\Program Files (x86)\SSL Corp eSigner CKA\eSignerCKA.exe'
+          # Find signtool
+          $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
+          if (!(Test-Path $signtool)) {
+            $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "signtool.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
+          }
+          Write-Host "Using signtool: $signtool"
+
+          # Find eSignerCKA
+          $ckaExe = "C:\Program Files (x86)\SSL Corp eSigner CKA\eSignerCKA.exe"
           if (!(Test-Path $ckaExe)) {
-            Write-Host "eSignerCKA.exe not found at $ckaExe. Searching..."
+            Write-Host "eSignerCKA.exe not found at default path. Searching..."
             $ckaExe = Get-ChildItem -Path "C:\Program Files (x86)\SSL Corp*" -Filter "eSignerCKA.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
-            Write-Host "Found at: $ckaExe"
           }
           
-          & $ckaExe config -mode manual -set_path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe"
+          if ($null -eq $ckaExe -or $ckaExe -eq "") {
+            throw "eSignerCKA.exe could not be located."
+          }
+          Write-Host "Using eSignerCKA: $ckaExe"
+          
+          # Config and Login
+          & $ckaExe config -mode manual -set_path "$signtool"
           & $ckaExe login `
             -username "${{ secrets.SS_USER_NAME }}" `
             -password "${{ secrets.SS_USER_PASSWORD }}" `
@@ -107,10 +119,9 @@ jobs:
           
           # Copy to signed dir first because signtool signs in-place
           Copy-Item -Path $absoluteMsixPath -Destination $signedMsixPath
-
+          
           # Sign with signtool
-          # We use signtool directly. eSignerCKA provides the KSP "SSL.com KSP".
-          & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /f "${{ secrets.SS_CREDENTIAL_ID }}" /csp "SSL.com KSP" /kc "${{ secrets.SS_USER_NAME }}" "$signedMsixPath"
+          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /f "${{ secrets.SS_CREDENTIAL_ID }}" /csp "SSL.com KSP" /kc "${{ secrets.SS_USER_NAME }}" "$signedMsixPath"
           
           # Logout
           & $ckaExe logout
