@@ -54,10 +54,17 @@ jobs:
           
           # Run the EXE installer silently
           Write-Host "Installing $($exePath.FullName)..."
-          # SSL.com eSigner CKA uses /S for silent install. 
-          # We use Start-Process with -Wait. If it hangs, it might be due to a prompt.
-          # According to SSL.com docs, /S should be enough.
-          $process = Start-Process -FilePath $exePath.FullName -ArgumentList "/S" -PassThru -Wait
+          # SSL.com eSigner CKA uses Inno Setup.
+          # According to the help output, correct flags for silent install are:
+          # /VERYSILENT - completely silent
+          # /SUPPRESSMSGBOXES - no dialogs
+          # /NORESTART - do not reboot
+          # /SP- - skip "This will install..." prompt
+          $process = Start-Process -FilePath $exePath.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/LOG=install.log" -PassThru -Wait
+          
+          if (Test-Path "install.log") {
+            Get-Content "install.log" | Select-Object -Last 20
+          }
           
           # Wait a bit more just in case
           Start-Sleep -Seconds 60
