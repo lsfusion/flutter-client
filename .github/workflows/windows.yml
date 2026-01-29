@@ -36,15 +36,31 @@ jobs:
           $url = "https://www.ssl.com/download/ssl-com-esigner-cka/"
           curl.exe -L $url -o eSignerCKA_Setup.zip
           Expand-Archive -Path eSignerCKA_Setup.zip -DestinationPath eSignerCKA_Setup
-          $msiPath = Get-ChildItem -Path eSignerCKA_Setup -Filter "*.msi" -Recurse | Select-Object -First 1
-          Start-Process msiexec.exe -ArgumentList "/i", "`"$($msiPath.FullName)`"", "/quiet", "/norestart" -Wait
+          
+          # The zip contains an EXE, not an MSI directly
+          $exePath = Get-ChildItem -Path eSignerCKA_Setup -Filter "*.exe" -Recurse | Select-Object -First 1
+          if ($null -eq $exePath) { throw "eSignerCKA EXE not found." }
+          
+          # Run the EXE installer silently
+          # Usually, Inno Setup or similar use /VERYSILENT /SUPPRESSMSGBOXES
+          # But for SSL.com it might be different. Let's try common flags.
+          Write-Host "Installing $($exePath.FullName)..."
+          Start-Process -FilePath $exePath.FullName -ArgumentList "/S", "/v/qn" -Wait
           
           # Add eSignerCKA to PATH
+          # Check both Program Files and Program Files (x86)
           $ckaPath = "C:\Program Files\SSL.com\eSignerCKA"
+          if (!(Test-Path $ckaPath)) {
+            $ckaPath = "C:\Program Files (x86)\SSL.com\eSignerCKA"
+          }
+          
           if (Test-Path $ckaPath) {
+            Write-Host "eSignerCKA installed at $ckaPath"
             echo "$ckaPath" >> $env:GITHUB_PATH
           } else {
-            throw "eSignerCKA installation failed."
+            # Debug: show where it might have been installed
+            Get-ChildItem -Path "C:\Program Files" -Filter "*SSL*" -Recurse -Depth 2
+            throw "eSignerCKA installation failed. Directory not found."
           }
         shell: pwsh
 
