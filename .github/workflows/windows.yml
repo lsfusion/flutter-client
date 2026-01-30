@@ -68,13 +68,22 @@ jobs:
           # Add eSignerCKA to PATH
           $ckaPath = "C:\Program Files (x86)\SSL Corp eSigner CKA"
           
-          if (Test-Path $ckaPath) {
+          if (!(Test-Path $ckaPath)) {
+            $ckaPath = "C:\Program Files\SSL Corp eSigner CKA"
+          }
+          
+          if (!(Test-Path $ckaPath)) {
+            Write-Host "Standard path not found. Searching for SSL folders..."
+            $ckaPath = Get-ChildItem -Path "C:\Program Files (x86)", "C:\Program Files" -Filter "*SSL Corp*" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+          }
+
+          if ($ckaPath -and (Test-Path $ckaPath)) {
             Write-Host "eSignerCKA installed at $ckaPath"
             echo "$ckaPath" >> $env:GITHUB_PATH
           } else {
             # Debug: show where it might have been installed
-            Write-Host "Standard path not found. Searching for SSL folders..."
-            Get-ChildItem -Path "C:\Program Files (x86)" -Filter "*SSL*" | Select-Object FullName
+            Write-Host "Search failed. Listing possible parent directories..."
+            Get-ChildItem -Path "C:\Program Files (x86)", "C:\Program Files" -Filter "*SSL*" | Select-Object FullName
             throw "eSignerCKA installation failed. Directory not found."
           }
         shell: pwsh
@@ -86,23 +95,42 @@ jobs:
           if (!(Test-Path $signtool)) {
             $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "signtool.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
           }
+          if ($null -eq $signtool -or $signtool -eq "") {
+            throw "signtool.exe could not be located."
+          }
           Write-Host "Using signtool: $signtool"
 
           # Find eSignerCKA
-          $ckaExe = "C:\Program Files (x86)\SSL Corp eSigner CKA\eSignerCKA.exe"
-          if (!(Test-Path $ckaExe)) {
-            Write-Host "eSignerCKA.exe not found at default path. Searching..."
-            $ckaExe = Get-ChildItem -Path "C:\Program Files (x86)\SSL Corp*" -Filter "eSignerCKA.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
+          # We check several possible locations based on logs
+          $possiblePaths = @(
+            "C:\Program Files (x86)\SSL Corp eSigner CKA\eSignerCKA.exe",
+            "C:\Program Files\SSL Corp eSigner CKA\eSignerCKA.exe",
+            "C:\Program Files (x86)\SSL.com\eSignerCKA\eSignerCKA.exe"
+          )
+          
+          $ckaExe = $null
+          foreach ($path in $possiblePaths) {
+            if (Test-Path $path) {
+              $ckaExe = $path
+              break
+            }
+          }
+
+          if ($null -eq $ckaExe) {
+            Write-Host "eSignerCKA.exe not found at known paths. Searching..."
+            $ckaExe = Get-ChildItem -Path "C:\Program Files (x86)", "C:\Program Files" -Filter "eSignerCKA.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
           }
           
           if ($null -eq $ckaExe -or $ckaExe -eq "") {
+            Write-Host "DEBUG: Listing SSL-related directories in Program Files..."
+            Get-ChildItem -Path "C:\Program Files (x86)", "C:\Program Files" -Filter "*SSL*" -ErrorAction SilentlyContinue | Select-Object FullName
             throw "eSignerCKA.exe could not be located."
           }
           Write-Host "Using eSignerCKA: $ckaExe"
           
           # Config and Login
-          & $ckaExe config -mode manual -set_path "$signtool"
-          & $ckaExe login `
+          & "$ckaExe" config -mode manual -set_path "$signtool"
+          & "$ckaExe" login `
             -username "${{ secrets.SS_USER_NAME }}" `
             -password "${{ secrets.SS_USER_PASSWORD }}" `
             -credential_id "${{ secrets.SS_CREDENTIAL_ID }}" `
@@ -124,7 +152,7 @@ jobs:
           & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /f "${{ secrets.SS_CREDENTIAL_ID }}" /csp "SSL.com KSP" /kc "${{ secrets.SS_USER_NAME }}" "$signedMsixPath"
           
           # Logout
-          & $ckaExe logout
+          & "$ckaExe" logout
         shell: pwsh
 
       - name: Upload Windows build
