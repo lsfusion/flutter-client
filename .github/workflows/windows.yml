@@ -53,106 +53,51 @@ jobs:
           curl.exe -L $url -o eSignerCKA_Setup.zip
           Expand-Archive -Path eSignerCKA_Setup.zip -DestinationPath eSignerCKA_Setup
           
-          # The zip contains an EXE, not an MSI directly
           $exePath = Get-ChildItem -Path eSignerCKA_Setup -Filter "*.exe" -Recurse | Select-Object -First 1
           if ($null -eq $exePath) { throw "eSignerCKA EXE not found." }
           
-          # Run the EXE installer silently
-          Write-Host "Installing $($exePath.FullName)..."
-          $process = Start-Process -FilePath $exePath.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/LOG=install.log" -PassThru -Wait
+          Write-Host "Installing eSigner CKA..."
+          Start-Process -FilePath $exePath.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/LOG=install.log" -Wait
           
-          if (Test-Path "install.log") {
-            Get-Content "install.log" | Select-Object -Last 20
-          }
-          
-          # Add eSignerCKA to PATH
           $ckaPath = "C:\Program Files (x86)\SSL Corp eSigner CKA"
-          
           if (!(Test-Path $ckaPath)) {
-            $ckaPath = "C:\Program Files\SSL Corp eSigner CKA"
-          }
-          
-          if (!(Test-Path $ckaPath)) {
-            Write-Host "Standard path not found. Searching for SSL folders..."
             $ckaPath = Get-ChildItem -Path "C:\Program Files (x86)", "C:\Program Files" -Filter "*SSL Corp*" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
           }
-
+          
           if ($ckaPath -and (Test-Path $ckaPath)) {
+            # Rename for easy use in command line
+            if (Test-Path "$ckaPath\eSigner CKA.exe") {
+              Move-Item "$ckaPath\eSigner CKA.exe" "$ckaPath\eSignerCKA.exe" -Force
+            }
             Write-Host "eSignerCKA installed at $ckaPath"
-            Write-Host "Listing files in $ckaPath recursively:"
-            Get-ChildItem -Path $ckaPath -Recurse | Select-Object FullName, Length
             echo "$ckaPath" >> $env:GITHUB_PATH
           } else {
-            # Debug: show where it might have been installed
-            Write-Host "Search failed. Listing possible parent directories..."
-            Get-ChildItem -Path "C:\Program Files (x86)", "C:\Program Files" -Filter "*SSL*" | Select-Object FullName
             throw "eSignerCKA installation failed. Directory not found."
           }
         shell: pwsh
 
       - name: Sign MSIX with eSigner CKA
         run: |
-          # Find signtool
           $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
           if (!(Test-Path $signtool)) {
             $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "signtool.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
           }
-          if ($null -eq $signtool -or $signtool -eq "") {
-            throw "signtool.exe could not be located."
-          }
-          Write-Host "Using signtool: $signtool"
 
-          # Find and Prepare eSignerCKA
-          $ckaDir = "C:\Program Files (x86)\SSL Corp eSigner CKA"
-          $ckaExe = Join-Path $ckaDir "eSigner CKA.exe"
-          $ckaShortExe = Join-Path $ckaDir "eSignerCKA.exe"
-          if (Test-Path "$ckaExe") {
-            Move-Item "$ckaExe" "$ckaShortExe" -Force -ErrorAction SilentlyContinue
-          }
-          $ckaExe = $ckaShortExe
-          $ckaTool = Join-Path $ckaDir "eSignerCKATool.exe"
+          # Standard commands from SSL.com Guide
+          eSignerCKA config -mode manual -set_path "$signtool"
+          eSignerCKA login -username "${{ secrets.SS_USER_NAME }}" -password "${{ secrets.SS_USER_PASSWORD }}" -credential_id "${{ secrets.SS_CREDENTIAL_ID }}" -totp_secret "${{ secrets.SS_TOTP_SECRET }}" -save
           
-          # Config eSignerCKA manual mode
-          & "$ckaExe" config -mode manual -set_path "$signtool"
-
-          # Login logic
-          $user = "${{ secrets.SS_USER_NAME }}"
-          $pass = "${{ secrets.SS_USER_PASSWORD }}"
-          $totp = "${{ secrets.SS_TOTP_SECRET }}"
-          $keyPath = Join-Path (Get-Location).Path "master.key"
-
-          Write-Host "Trying to login via eSignerCKATool..."
-          # Attempt 1: -topt=password, -pass=totp (as per tool help)
-          & "$ckaTool" config -mode product -user "$user" -topt "$pass" -pass "$totp" -key "$keyPath" -r
-          & "$ckaTool" load
+          # Prepare file
+          $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
+          $signedDir = "build/windows/x64/runner/Release/signed"
+          if (!(Test-Path $signedDir)) { New-Item -ItemType Directory -Force -Path $signedDir }
+          $signedMsixPath = "$signedDir/$($msixPath.Name)"
+          Copy-Item -Path $msixPath.FullName -Destination $signedMsixPath
           
-          # Check if Aliaksei or SSL.com is in store
-          $cert = Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object { $_.Subject -like "*Aliaksei*" -or $_.Issuer -like "*SSL*" } | Select-Object -First 1
+          # Sign using KSP as per guide
+          signtool sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "SSL.com KSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" "$signedMsixPath"
           
-          if ($null -eq $cert) {
-            Write-Host "Attempt 1 failed. Trying Attempt 2: -topt=totp, -pass=password (as per SSL.com guide)..."
-            & "$ckaTool" config -mode product -user "$user" -topt "$totp" -pass "$pass" -key "$keyPath" -r
-            & "$ckaTool" load
-            $cert = Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object { $_.Subject -like "*Aliaksei*" -or $_.Issuer -like "*SSL*" } | Select-Object -First 1
-          }
-
-          if ($cert) {
-            Write-Host "Found certificate: $($cert.Subject)"
-            
-            $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
-            if ($null -eq $msixPath) { throw "MSIX file not found." }
-            $signedMsixPath = Join-Path (Get-Location).Path "build/windows/x64/runner/Release/signed/$($msixPath.Name)"
-            if (!(Test-Path (Split-Path $signedMsixPath))) { New-Item -ItemType Directory -Force -Path (Split-Path $signedMsixPath) }
-            Copy-Item -Path $msixPath.FullName -Destination $signedMsixPath
-            
-            & "$signtool" sign /debug /sha1 "$($cert.Thumbprint)" /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "SSL.com KSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" /sm "$signedMsixPath"
-          } else {
-            Write-Host "DEBUG: Full Store Dump"
-            certutil -user -store My
-            throw "Certificate still not found after both attempts."
-          }
-          
-          & "$ckaTool" unload
+          eSignerCKA logout
         shell: pwsh
 
       - name: List Certificates (Debug)
