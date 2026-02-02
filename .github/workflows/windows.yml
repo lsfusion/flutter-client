@@ -85,45 +85,41 @@ jobs:
 
           $ckaDir = "C:\Program Files (x86)\SSL Corp eSigner CKA"
           $ckaTool = Join-Path $ckaDir "eSignerCKATool.exe"
+          $masterKey = Join-Path (Get-Location).Path "master.key"
 
-          # 1. Config manual mode
-          eSignerCKA config -mode manual -set_path "$signtool"
+          # Pure SSL.com Guide Approach
+          Write-Host "Configuring eSignerCKATool..."
+          # Applying parameters EXACTLY as shown in the SSL.com guide:
+          # -user: Username
+          # -pass: Password
+          # -totp: TOTP Secret
+          & "$ckaTool" config -mode product -user "${{ secrets.SS_USER_NAME }}" -pass "${{ secrets.SS_USER_PASSWORD }}" -totp "${{ secrets.SS_TOTP_SECRET }}" -key "$masterKey" -r
           
-          # 2. Diagnostic: check secrets (format only)
-          $totp = "${{ secrets.SS_TOTP_SECRET }}".Trim()
-          if ($totp -match "^[A-Z2-7]+=*$") {
-            Write-Host "TOTP secret format: OK (Base32)"
-          } else {
-            Write-Host "WARNING: TOTP secret format may be incorrect. Expected Base32 string, not 6-digit code."
-          }
-
-          # 3. Attempt Login (Main Tool)
-          Write-Host "Logging in via eSignerCKA..."
-          eSignerCKA login -username "${{ secrets.SS_USER_NAME }}" -password "${{ secrets.SS_USER_PASSWORD }}" -credential_id "${{ secrets.SS_CREDENTIAL_ID }}" -totp_secret "$totp" -save
+          $configResult = $LASTEXITCODE
+          Write-Host "Config Exit Code: $configResult"
           
-          # 4. Fallback/Verification via eSignerCKATool (often gives better errors)
-          Write-Host "Verifying login/load via eSignerCKATool..."
-          $keyPath = Join-Path (Get-Location).Path "master.key"
-          # Attempting with parameters that usually work despite confusing help text
-          & "$ckaTool" config -mode product -user "${{ secrets.SS_USER_NAME }}" -topt "${{ secrets.SS_USER_PASSWORD }}" -pass "$totp" -key "$keyPath" -r
+          Write-Host "Loading certificates..."
           & "$ckaTool" load
           
-          # 5. Propagation and Store Check
-          Write-Host "Waiting for certificate propagation..."
-          Start-Sleep -Seconds 20
+          $loadResult = $LASTEXITCODE
+          Write-Host "Load Exit Code: $loadResult"
+
+          # Check store for debug
+          Write-Host "Current certificates in My store:"
           certutil -user -store My
           
-          # 6. Prepare and Sign
+          # Prepare file for signing
           $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
+          if ($null -eq $msixPath) { throw "MSIX file not found." }
           $signedDir = "build/windows/x64/runner/Release/signed"
           if (!(Test-Path $signedDir)) { New-Item -ItemType Directory -Force -Path $signedDir }
           $signedMsixPath = "$signedDir/$($msixPath.Name)"
           Copy-Item -Path $msixPath.FullName -Destination $signedMsixPath
           
-          Write-Host "Signing..."
+          Write-Host "Signing with signtool..."
           & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "SSL.com KSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" "$signedMsixPath"
           
-          eSignerCKA logout
+          & "$ckaTool" unload
         shell: pwsh
 
       - name: List Certificates (Debug)
