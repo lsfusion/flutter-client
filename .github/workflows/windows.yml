@@ -105,11 +105,10 @@ jobs:
           # Find eSignerCKA
           # We check several possible locations based on logs
           $possiblePaths = @(
+            "C:\Program Files (x86)\SSL Corp eSigner CKA\eSigner CKA.exe",
             "C:\Program Files (x86)\SSL Corp eSigner CKA\eSignerCKA.exe",
-            "C:\Program Files\SSL Corp eSigner CKA\eSigner.exe",
-            "C:\Program Files\SSL Corp eSigner CKA\eSignerCloudKeyAdapter.exe",
-            "C:\Program Files\SSL Corp eSigner CKA\eSignerCSP.Config.exe",
-            "C:\Program Files (x86)\SSL Corp eSigner CKA\eSigner.exe"
+            "C:\Program Files\SSL Corp eSigner CKA\eSignerCKA.exe",
+            "C:\Program Files (x86)\SSL.com\eSignerCKA\eSignerCKA.exe"
           )
   
           $ckaExe = $null
@@ -160,7 +159,9 @@ jobs:
           Copy-Item -Path $absoluteMsixPath -Destination $signedMsixPath
           
           # Sign with signtool
-          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /f "${{ secrets.SS_CREDENTIAL_ID }}" /csp "SSL.com KSP" /kc "${{ secrets.SS_USER_NAME }}" "$signedMsixPath"
+          # For eSigner CKA with KSP, we use /csp "SSL.com KSP" and /kc for the key container (credential id)
+          # We do NOT use /f because we are using the KSP provider
+          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "SSL.com KSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" "$signedMsixPath"
           
           # Logout
           & "$ckaExe" logout
