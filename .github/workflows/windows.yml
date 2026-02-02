@@ -102,125 +102,57 @@ jobs:
           }
           Write-Host "Using signtool: $signtool"
 
-          # Find eSignerCKA
-          # We check several possible locations based on logs
-          $possiblePaths = @(
-            "C:\Program Files (x86)\SSL Corp eSigner CKA\eSigner CKA.exe",
-            "C:\Program Files (x86)\SSL Corp eSigner CKA\eSignerCKA.exe",
-            "C:\Program Files\SSL Corp eSigner CKA\eSignerCKA.exe",
-            "C:\Program Files (x86)\SSL.com\eSignerCKA\eSignerCKA.exe"
-          )
-  
-          $ckaExe = $null
-          foreach ($path in $possiblePaths) {
-            if (Test-Path $path) {
-              $ckaExe = $path
-              break
-            }
-          }
-  
-          if ($null -eq $ckaExe) {
-            Write-Host "eSignerCKA.exe not found at known paths. Searching for ANY .exe in SSL Corp folder..."
-            $ckaExe = Get-ChildItem -Path "C:\Program Files (x86)\SSL Corp*" -Filter "*.exe" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*eSigner*" } | Select-Object -First 1 -ExpandProperty FullName
-          }
-  
-          if ($null -eq $ckaExe -or $ckaExe -eq "") {
-            Write-Host "Still not found. Searching for ANY .exe in all SSL-related folders..."
-            $ckaExe = Get-ChildItem -Path "C:\Program Files (x86)", "C:\Program Files" -Filter "*.exe" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like "*SSL*" -and $_.Name -like "*eSigner*" } | Select-Object -First 1 -ExpandProperty FullName
-          }
-
-          if ($null -eq $ckaExe -or $ckaExe -eq "") {
-            Write-Host "DEBUG: Listing ALL files in SSL Corp directory if it exists..."
-            if (Test-Path "C:\Program Files (x86)\SSL Corp eSigner CKA") {
-               Get-ChildItem -Path "C:\Program Files (x86)\SSL Corp eSigner CKA" -Recurse | Select-Object FullName
-            }
-            throw "eSignerCKA executable could not be located."
-          }
-          
-          # Rename the executable to remove spaces, which can cause issues with some command parsers
-          $ckaDir = Split-Path $ckaExe
+          # Find and Prepare eSignerCKA
+          $ckaDir = "C:\Program Files (x86)\SSL Corp eSigner CKA"
+          $ckaExe = Join-Path $ckaDir "eSigner CKA.exe"
           $ckaShortExe = Join-Path $ckaDir "eSignerCKA.exe"
-          if (!(Test-Path $ckaShortExe)) {
-            Write-Host "Renaming '$ckaExe' to '$ckaShortExe'..."
-            Move-Item "$ckaExe" "$ckaShortExe" -Force
+          if (Test-Path "$ckaExe") {
+            Move-Item "$ckaExe" "$ckaShortExe" -Force -ErrorAction SilentlyContinue
           }
           $ckaExe = $ckaShortExe
-          Write-Host "Using eSignerCKA: $ckaExe"
+          $ckaTool = Join-Path $ckaDir "eSignerCKATool.exe"
           
-          # Config
-          Write-Host "Configuring eSignerCKA..."
+          # Config eSignerCKA manual mode
           & "$ckaExe" config -mode manual -set_path "$signtool"
-          Write-Host "Config completed."
-          
-          # Attempt Login
-          Write-Host "Checking secrets availability..."
-          if ([string]::IsNullOrWhiteSpace("${{ secrets.SS_USER_NAME }}")) { throw "SS_USER_NAME is missing" }
-          if ([string]::IsNullOrWhiteSpace("${{ secrets.SS_USER_PASSWORD }}")) { throw "SS_USER_PASSWORD is missing" }
-          if ([string]::IsNullOrWhiteSpace("${{ secrets.SS_CREDENTIAL_ID }}")) { throw "SS_CREDENTIAL_ID is missing" }
-          if ([string]::IsNullOrWhiteSpace("${{ secrets.SS_TOTP_SECRET }}")) { throw "SS_TOTP_SECRET is missing" }
 
-          # Attempt Login
-          Write-Host "Checking secrets availability..."
-          if ([string]::IsNullOrWhiteSpace("${{ secrets.SS_USER_NAME }}")) { throw "SS_USER_NAME is missing" }
-          if ([string]::IsNullOrWhiteSpace("${{ secrets.SS_USER_PASSWORD }}")) { throw "SS_USER_PASSWORD is missing" }
-          if ([string]::IsNullOrWhiteSpace("${{ secrets.SS_CREDENTIAL_ID }}")) { throw "SS_CREDENTIAL_ID is missing" }
-          if ([string]::IsNullOrWhiteSpace("${{ secrets.SS_TOTP_SECRET }}")) { throw "SS_TOTP_SECRET is missing" }
+          # Login logic
+          $user = "${{ secrets.SS_USER_NAME }}"
+          $pass = "${{ secrets.SS_USER_PASSWORD }}"
+          $totp = "${{ secrets.SS_TOTP_SECRET }}"
+          $keyPath = Join-Path (Get-Location).Path "master.key"
 
-          Write-Host "Attempting login with eSignerCKA.exe (the main tool)..."
-          # We use the main tool because it supports credential_id
-          # We call it without backticks to be 100% sure about argument parsing
-          & "$ckaExe" login -username "${{ secrets.SS_USER_NAME }}" -password "${{ secrets.SS_USER_PASSWORD }}" -credential_id "${{ secrets.SS_CREDENTIAL_ID }}" -totp_secret "${{ secrets.SS_TOTP_SECRET }}" -save
+          Write-Host "Trying to login via eSignerCKATool..."
+          # Attempt 1: -topt=password, -pass=totp (as per tool help)
+          & "$ckaTool" config -mode product -user "$user" -topt "$pass" -pass "$totp" -key "$keyPath" -r
+          & "$ckaTool" load
           
-          $loginResult = $LASTEXITCODE
-          Write-Host "Login result code: $loginResult"
+          # Check if Aliaksei or SSL.com is in store
+          $cert = Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object { $_.Subject -like "*Aliaksei*" -or $_.Issuer -like "*SSL*" } | Select-Object -First 1
           
-          if ($loginResult -ne 0) {
-            Write-Host "Login failed. Showing help for eSignerCKA.exe..."
-            & "$ckaExe" --help
-            
-            Write-Host "Attempting fallback to eSignerCKATool.exe with guessed parameters..."
-            $ckaTool = Join-Path $ckaDir "eSignerCKATool.exe"
-            $keyPath = "C:\master.key"
-            # In eSignerCKATool, the labels might be: -topt is password, -pass is TOTP secret?
-            # Let's try to match what the help said:
-            & "$ckaTool" config -mode product -user "${{ secrets.SS_USER_NAME }}" -topt "${{ secrets.SS_USER_PASSWORD }}" -pass "${{ secrets.SS_TOTP_SECRET }}" -key "$keyPath" -r
-            if ($LASTEXITCODE -eq 0) {
-               & "$ckaTool" load
-               $loginResult = $LASTEXITCODE
-            }
+          if ($null -eq $cert) {
+            Write-Host "Attempt 1 failed. Trying Attempt 2: -topt=totp, -pass=password (as per SSL.com guide)..."
+            & "$ckaTool" config -mode product -user "$user" -topt "$totp" -pass "$pass" -key "$keyPath" -r
+            & "$ckaTool" load
+            $cert = Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object { $_.Subject -like "*Aliaksei*" -or $_.Issuer -like "*SSL*" } | Select-Object -First 1
           }
-          
-          if ($loginResult -ne 0) {
-            throw "Login process failed after all attempts. Check logs above."
-          }
-          Write-Host "Login successful."
-          
-          # Wait for propagation
-          Write-Host "Waiting for certificate propagation..."
-          Start-Sleep -Seconds 15
-
-          # Search for certificate (restored previous logic as requested)
-          $cert = Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object { 
-            ($_.Issuer -like "*SSL Corp*" -or $_.Issuer -like "*SSL.com*" -or $_.Subject -like "*SSL.com*")
-          } | Select-Object -First 1
 
           if ($cert) {
-            Write-Host "Found matching certificate: $($cert.Subject) ($($cert.Thumbprint))"
-            # Try both possible CSP names
-            Write-Host "Attempting sign with SSL.com KSP..."
-            & "$signtool" sign /debug /sha1 "$($cert.Thumbprint)" /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "SSL.com KSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" /sm "$signedMsixPath"
+            Write-Host "Found certificate: $($cert.Subject)"
             
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host "Sign failed with SSL.com KSP. Trying eSignerKSP..."
-              & "$signtool" sign /debug /sha1 "$($cert.Thumbprint)" /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "eSignerKSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" /sm "$signedMsixPath"
-            }
+            $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
+            if ($null -eq $msixPath) { throw "MSIX file not found." }
+            $signedMsixPath = Join-Path (Get-Location).Path "build/windows/x64/runner/Release/signed/$($msixPath.Name)"
+            if (!(Test-Path (Split-Path $signedMsixPath))) { New-Item -ItemType Directory -Force -Path (Split-Path $signedMsixPath) }
+            Copy-Item -Path $msixPath.FullName -Destination $signedMsixPath
+            
+            & "$signtool" sign /debug /sha1 "$($cert.Thumbprint)" /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "SSL.com KSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" /sm "$signedMsixPath"
           } else {
-            Write-Host "Target certificate (SSL.com) NOT found in any store."
-            throw "Certificate not found. Signing aborted."
+            Write-Host "DEBUG: Full Store Dump"
+            certutil -user -store My
+            throw "Certificate still not found after both attempts."
           }
           
-          # Logout
-          & "$ckaExe" logout
+          & "$ckaTool" unload
         shell: pwsh
 
       - name: List Certificates (Debug)
