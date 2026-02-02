@@ -159,39 +159,39 @@ jobs:
           if ([string]::IsNullOrWhiteSpace("${{ secrets.SS_CREDENTIAL_ID }}")) { throw "SS_CREDENTIAL_ID is missing" }
           if ([string]::IsNullOrWhiteSpace("${{ secrets.SS_TOTP_SECRET }}")) { throw "SS_TOTP_SECRET is missing" }
 
-          Write-Host "Attempting login with eSignerCKA..."
-          # Using a single line to avoid any backtick/line-ending issues in CI
-          & "$ckaExe" login -username "${{ secrets.SS_USER_NAME }}" -password "${{ secrets.SS_USER_PASSWORD }}" -credential_id "${{ secrets.SS_CREDENTIAL_ID }}" -totp_secret "${{ secrets.SS_TOTP_SECRET }}" -save
+          Write-Host "Attempting login with eSignerCKATool.exe..."
+          $ckaTool = Join-Path $ckaDir "eSignerCKATool.exe"
+          
+          # eSignerCKATool has different parameters:
+          # -user instead of -username
+          # -topt instead of -password (yes, according to help!)
+          # -pass instead of -totp_secret (yes, according to help!)
+          # -key <path> is required
+          $keyPath = Join-Path $ckaDir "master.key"
+          & "$ckaTool" config -mode product -user "${{ secrets.SS_USER_NAME }}" -topt "${{ secrets.SS_USER_PASSWORD }}" -pass "${{ secrets.SS_TOTP_SECRET }}" -key "$keyPath" -r
           
           $loginResult = $LASTEXITCODE
-          Write-Host "Login result code: $loginResult"
+          Write-Host "Config result code: $loginResult"
           
-          if ($loginResult -ne 0) {
-            Write-Host "Login via eSignerCKA failed ($loginResult). Trying eSignerCKATool.exe as fallback..."
-            $ckaTool = Join-Path $ckaDir "eSignerCKATool.exe"
-            if (Test-Path $ckaTool) {
-               & "$ckaTool" login -username "${{ secrets.SS_USER_NAME }}" -password "${{ secrets.SS_USER_PASSWORD }}" -credential_id "${{ secrets.SS_CREDENTIAL_ID }}" -totp_secret "${{ secrets.SS_TOTP_SECRET }}" -save
-               $loginResult = $LASTEXITCODE
-               Write-Host "Fallback login result code: $loginResult"
-            }
+          if ($loginResult -eq 0) {
+            Write-Host "Loading certificates..."
+            & "$ckaTool" load
+            $loginResult = $LASTEXITCODE
+            Write-Host "Load result code: $loginResult"
           }
           
           if ($loginResult -ne 0) {
-            Write-Host "Login failed. Attempting to get help from both tools..."
-            & "$ckaExe" --help
-            $ckaTool = Join-Path $ckaDir "eSignerCKATool.exe"
-            if (Test-Path $ckaTool) { & "$ckaTool" --help }
+            Write-Host "Login via eSignerCKATool failed. Showing help:"
+            & "$ckaTool" --help
             throw "Login failed with exit code $loginResult."
           }
-          Write-Host "Login completed successfully."
+          Write-Host "Login and Load completed successfully."
 
-          # Check if eSignerCKATool exists and can show info
-          $ckaTool = Join-Path $ckaDir "eSignerCKATool.exe"
-          if (Test-Path $ckaTool) {
-            Write-Host "Running eSignerCKATool for diagnostics..."
-            & "$ckaTool" certificates
-          }
-
+          # Diagnostic: check certificates
+          Write-Host "Running diagnostics with eSignerCKATool..."
+          # Since 'certificates' command is not in the list, we skip it or use 'load' again which shows info
+          & "$ckaTool" load
+          
           # Important: Wait a few seconds for the certificate to be propagated to the store
           Write-Host "Waiting for certificate propagation..."
           Start-Sleep -Seconds 15
