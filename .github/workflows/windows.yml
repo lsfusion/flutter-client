@@ -95,7 +95,7 @@ jobs:
           Copy-Item -Path $msixPath.FullName -Destination $signedMsixPath
           
           # Sign using KSP as per guide
-          signtool sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "SSL.com KSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" "$signedMsixPath"
+          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "SSL.com KSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" "$signedMsixPath"
           
           eSignerCKA logout
         shell: pwsh
