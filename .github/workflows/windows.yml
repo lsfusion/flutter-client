@@ -83,18 +83,44 @@ jobs:
             $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "signtool.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
           }
 
-          # Standard commands from SSL.com Guide
+          $ckaDir = "C:\Program Files (x86)\SSL Corp eSigner CKA"
+          $ckaTool = Join-Path $ckaDir "eSignerCKATool.exe"
+
+          # 1. Config manual mode
           eSignerCKA config -mode manual -set_path "$signtool"
-          eSignerCKA login -username "${{ secrets.SS_USER_NAME }}" -password "${{ secrets.SS_USER_PASSWORD }}" -credential_id "${{ secrets.SS_CREDENTIAL_ID }}" -totp_secret "${{ secrets.SS_TOTP_SECRET }}" -save
           
-          # Prepare file
+          # 2. Diagnostic: check secrets (format only)
+          $totp = "${{ secrets.SS_TOTP_SECRET }}".Trim()
+          if ($totp -match "^[A-Z2-7]+=*$") {
+            Write-Host "TOTP secret format: OK (Base32)"
+          } else {
+            Write-Host "WARNING: TOTP secret format may be incorrect. Expected Base32 string, not 6-digit code."
+          }
+
+          # 3. Attempt Login (Main Tool)
+          Write-Host "Logging in via eSignerCKA..."
+          eSignerCKA login -username "${{ secrets.SS_USER_NAME }}" -password "${{ secrets.SS_USER_PASSWORD }}" -credential_id "${{ secrets.SS_CREDENTIAL_ID }}" -totp_secret "$totp" -save
+          
+          # 4. Fallback/Verification via eSignerCKATool (often gives better errors)
+          Write-Host "Verifying login/load via eSignerCKATool..."
+          $keyPath = Join-Path (Get-Location).Path "master.key"
+          # Attempting with parameters that usually work despite confusing help text
+          & "$ckaTool" config -mode product -user "${{ secrets.SS_USER_NAME }}" -topt "${{ secrets.SS_USER_PASSWORD }}" -pass "$totp" -key "$keyPath" -r
+          & "$ckaTool" load
+          
+          # 5. Propagation and Store Check
+          Write-Host "Waiting for certificate propagation..."
+          Start-Sleep -Seconds 20
+          certutil -user -store My
+          
+          # 6. Prepare and Sign
           $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
           $signedDir = "build/windows/x64/runner/Release/signed"
           if (!(Test-Path $signedDir)) { New-Item -ItemType Directory -Force -Path $signedDir }
           $signedMsixPath = "$signedDir/$($msixPath.Name)"
           Copy-Item -Path $msixPath.FullName -Destination $signedMsixPath
           
-          # Sign using KSP as per guide
+          Write-Host "Signing..."
           & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "SSL.com KSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" "$signedMsixPath"
           
           eSignerCKA logout
