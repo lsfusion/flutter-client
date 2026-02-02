@@ -146,6 +146,10 @@ jobs:
             -credential_id "${{ secrets.SS_CREDENTIAL_ID }}" `
             -totp_secret "${{ secrets.SS_TOTP_SECRET }}" `
             -save
+
+          # Debug: List certificates immediately after login
+          Write-Host "Listing certificates in My store after login..."
+          Get-ChildItem -Path Cert:\CurrentUser\My | Select-Object Subject, Thumbprint, EnhancedKeyUsageList
           
           $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
           if ($null -eq $msixPath) { throw "MSIX file not found." }
@@ -161,10 +165,19 @@ jobs:
           # Sign with signtool
           # For eSigner CKA with KSP, we use /csp "SSL.com KSP" and /kc for the key container (credential id)
           # We do NOT use /f because we are using the KSP provider
-          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "SSL.com KSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" "$signedMsixPath"
+          # IMPORTANT: We need to make sure the certificate is selected/imported.
+          # Some versions of eSigner CKA need to have the certificate explicitly "seen" by signtool.
+          # Let's try to add /sm (System Store) and verify if logout should be AFTER signtool (it is).
+          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "SSL.com KSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" /sm "$signedMsixPath"
           
           # Logout
           & "$ckaExe" logout
+        shell: pwsh
+
+      - name: List Certificates (Debug)
+        if: always()
+        run: |
+          Get-ChildItem -Path Cert:\CurrentUser\My | Select-Object Subject, Thumbprint, EnhancedKeyUsageList
         shell: pwsh
 
       - name: Upload Windows build
