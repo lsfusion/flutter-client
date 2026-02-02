@@ -149,22 +149,24 @@ jobs:
           
           # Config
           Write-Host "Configuring eSignerCKA..."
-          $configProc = Start-Process -FilePath "$ckaExe" -ArgumentList "config", "-mode", "manual", "-set_path", "$signtool" -Wait -NoNewWindow -PassThru
-          Write-Host "Config Exit Code: $($configProc.ExitCode)"
+          & "$ckaExe" config -mode manual -set_path "$signtool"
+          Write-Host "Config completed."
           
           # Attempt Login
           Write-Host "Attempting login..."
-          # We use Start-Process to ensure it's executed as a separate process and we can capture the exit code reliably
-          $loginProc = Start-Process -FilePath "$ckaExe" -ArgumentList "login", "-username", "${{ secrets.SS_USER_NAME }}", "-password", "${{ secrets.SS_USER_PASSWORD }}", "-credential_id", "${{ secrets.SS_CREDENTIAL_ID }}", "-totp_secret", "${{ secrets.SS_TOTP_SECRET }}", "-save" -Wait -NoNewWindow -PassThru
+          & "$ckaExe" login `
+            -username "${{ secrets.SS_USER_NAME }}" `
+            -password "${{ secrets.SS_USER_PASSWORD }}" `
+            -credential_id "${{ secrets.SS_CREDENTIAL_ID }}" `
+            -totp_secret "${{ secrets.SS_TOTP_SECRET }}" `
+            -save
           
-          Write-Host "Login Exit Code: $($loginProc.ExitCode)"
-          
-          if ($loginProc.ExitCode -ne 0) {
-            # Try to run with --help to see if arguments are correct
-            Write-Host "Login failed. Showing help for eSignerCKA:"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Login failed with exit code $LASTEXITCODE. Showing help:"
             & "$ckaExe" --help
-            throw "Login failed with exit code $($loginProc.ExitCode)"
+            throw "Login failed."
           }
+          Write-Host "Login completed successfully."
 
           # Check if eSignerCKATool exists and can show info
           $ckaTool = Join-Path $ckaDir "eSignerCKATool.exe"
