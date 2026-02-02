@@ -163,9 +163,18 @@ jobs:
           Copy-Item -Path $absoluteMsixPath -Destination $signedMsixPath
           
           # Sign with signtool
-          # We add /a to allow signtool to choose the best certificate automatically.
-          # We also keep /csp and /kc to point to the SSL.com KSP.
-          & "$signtool" sign /debug /a /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "SSL.com KSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" /sm "$signedMsixPath"
+          # We use /sha1 to explicitly select the certificate if we can find it, 
+          # otherwise we use /n for the subject name if known. 
+          # For SSL.com, the certificate subject usually contains the organization name.
+          # We'll try to find the SSL.com certificate thumbprint dynamically.
+          $cert = Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object { $_.Issuer -like "*SSL.com*" -or $_.Subject -like "*SSL.com*" } | Select-Object -First 1
+          if ($cert) {
+            Write-Host "Found SSL.com certificate: $($cert.Subject) ($($cert.Thumbprint))"
+            & "$signtool" sign /debug /sha1 "$($cert.Thumbprint)" /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "SSL.com KSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" /sm "$signedMsixPath"
+          } else {
+            Write-Host "SSL.com certificate not found by issuer/subject. Falling back to /a with KSP filter."
+            & "$signtool" sign /debug /a /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "SSL.com KSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" /sm "$signedMsixPath"
+          }
           
           # Logout
           & "$ckaExe" logout
