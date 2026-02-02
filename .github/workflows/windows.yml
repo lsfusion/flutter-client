@@ -139,16 +139,38 @@ jobs:
           Write-Host "Using eSignerCKA: $ckaExe"
           
           # Config and Login
+          Write-Host "Configuring eSignerCKA..."
           & "$ckaExe" config -mode manual -set_path "$signtool"
-          & "$ckaExe" login `
+          
+          Write-Host "Attempting login..."
+          $loginOutput = & "$ckaExe" login `
             -username "${{ secrets.SS_USER_NAME }}" `
             -password "${{ secrets.SS_USER_PASSWORD }}" `
             -credential_id "${{ secrets.SS_CREDENTIAL_ID }}" `
             -totp_secret "${{ secrets.SS_TOTP_SECRET }}" `
-            -save
+            -save 2>&1
+          
+          $loginExitCode = $LASTEXITCODE
+          Write-Host "Login Output: $loginOutput"
+          Write-Host "Login Exit Code: $loginExitCode"
+          
+          if ($loginExitCode -ne 0) {
+            throw "Login failed with exit code $loginExitCode"
+          }
+
+          # Check if eSignerCKATool exists and can show info
+          $ckaTool = Join-Path (Split-Path $ckaExe) "eSignerCKATool.exe"
+          if (Test-Path $ckaTool) {
+            Write-Host "Running eSignerCKATool for diagnostics..."
+            & "$ckaTool" certificates
+          }
+
+          # Important: Wait a few seconds for the certificate to be propagated to the store
+          Write-Host "Waiting for certificate propagation..."
+          Start-Sleep -Seconds 15
 
           # Debug: List certificates immediately after login
-          Write-Host "Listing certificates in My store after login (Detailed)..."
+          Write-Host "Listing ALL certificates in My store after login..."
           Get-ChildItem -Path Cert:\CurrentUser\My | Select-Object Subject, Issuer, Thumbprint, EnhancedKeyUsageList | Format-List
           
           $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
@@ -163,16 +185,17 @@ jobs:
           Copy-Item -Path $absoluteMsixPath -Destination $signedMsixPath
           
           # Sign with signtool
-          # We use /sha1 to explicitly select the certificate if we can find it, 
-          # otherwise we use /n for the subject name if known. 
-          # For SSL.com, the certificate subject usually contains the organization name.
-          # We'll try to find the SSL.com certificate thumbprint dynamically.
-          $cert = Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object { $_.Issuer -like "*SSL.com*" -or $_.Subject -like "*SSL.com*" } | Select-Object -First 1
+          # We search for certificates that match SSL.com
+          $cert = Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object { 
+            ($_.Issuer -like "*SSL Corp*" -or $_.Issuer -like "*SSL.com*" -or $_.Subject -like "*SSL.com*")
+          } | Select-Object -First 1
+
           if ($cert) {
-            Write-Host "Found SSL.com certificate: $($cert.Subject) ($($cert.Thumbprint))"
+            Write-Host "Found matching certificate: $($cert.Subject) ($($cert.Thumbprint))"
             & "$signtool" sign /debug /sha1 "$($cert.Thumbprint)" /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "SSL.com KSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" /sm "$signedMsixPath"
           } else {
-            Write-Host "SSL.com certificate not found by issuer/subject. Falling back to /a with KSP filter."
+            Write-Host "Target certificate (SSL.com) NOT found in store."
+            Write-Host "Falling back to /a with explicit KSP filter as a last resort..."
             & "$signtool" sign /debug /a /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "SSL.com KSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" /sm "$signedMsixPath"
           }
           
