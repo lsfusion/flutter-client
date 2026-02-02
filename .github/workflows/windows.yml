@@ -153,18 +153,35 @@ jobs:
           Write-Host "Config completed."
           
           # Attempt Login
-          Write-Host "Attempting login..."
-          & "$ckaExe" login `
-            -username "${{ secrets.SS_USER_NAME }}" `
-            -password "${{ secrets.SS_USER_PASSWORD }}" `
-            -credential_id "${{ secrets.SS_CREDENTIAL_ID }}" `
-            -totp_secret "${{ secrets.SS_TOTP_SECRET }}" `
-            -save
+          Write-Host "Checking secrets availability..."
+          if ([string]::IsNullOrWhiteSpace("${{ secrets.SS_USER_NAME }}")) { throw "SS_USER_NAME is missing" }
+          if ([string]::IsNullOrWhiteSpace("${{ secrets.SS_USER_PASSWORD }}")) { throw "SS_USER_PASSWORD is missing" }
+          if ([string]::IsNullOrWhiteSpace("${{ secrets.SS_CREDENTIAL_ID }}")) { throw "SS_CREDENTIAL_ID is missing" }
+          if ([string]::IsNullOrWhiteSpace("${{ secrets.SS_TOTP_SECRET }}")) { throw "SS_TOTP_SECRET is missing" }
+
+          Write-Host "Attempting login with eSignerCKA..."
+          # Using a single line to avoid any backtick/line-ending issues in CI
+          & "$ckaExe" login -username "${{ secrets.SS_USER_NAME }}" -password "${{ secrets.SS_USER_PASSWORD }}" -credential_id "${{ secrets.SS_CREDENTIAL_ID }}" -totp_secret "${{ secrets.SS_TOTP_SECRET }}" -save
           
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "Login failed with exit code $LASTEXITCODE. Showing help:"
+          $loginResult = $LASTEXITCODE
+          Write-Host "Login result code: $loginResult"
+          
+          if ($loginResult -ne 0) {
+            Write-Host "Login via eSignerCKA failed ($loginResult). Trying eSignerCKATool.exe as fallback..."
+            $ckaTool = Join-Path $ckaDir "eSignerCKATool.exe"
+            if (Test-Path $ckaTool) {
+               & "$ckaTool" login -username "${{ secrets.SS_USER_NAME }}" -password "${{ secrets.SS_USER_PASSWORD }}" -credential_id "${{ secrets.SS_CREDENTIAL_ID }}" -totp_secret "${{ secrets.SS_TOTP_SECRET }}" -save
+               $loginResult = $LASTEXITCODE
+               Write-Host "Fallback login result code: $loginResult"
+            }
+          }
+          
+          if ($loginResult -ne 0) {
+            Write-Host "Login failed. Attempting to get help from both tools..."
             & "$ckaExe" --help
-            throw "Login failed."
+            $ckaTool = Join-Path $ckaDir "eSignerCKATool.exe"
+            if (Test-Path $ckaTool) { & "$ckaTool" --help }
+            throw "Login failed with exit code $loginResult."
           }
           Write-Host "Login completed successfully."
 
