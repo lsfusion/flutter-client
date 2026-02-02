@@ -136,30 +136,38 @@ jobs:
             }
             throw "eSignerCKA executable could not be located."
           }
+          
+          # Rename the executable to remove spaces, which can cause issues with some command parsers
+          $ckaDir = Split-Path $ckaExe
+          $ckaShortExe = Join-Path $ckaDir "eSignerCKA.exe"
+          if (!(Test-Path $ckaShortExe)) {
+            Write-Host "Renaming '$ckaExe' to '$ckaShortExe'..."
+            Move-Item "$ckaExe" "$ckaShortExe" -Force
+          }
+          $ckaExe = $ckaShortExe
           Write-Host "Using eSignerCKA: $ckaExe"
           
-          # Config and Login
+          # Config
           Write-Host "Configuring eSignerCKA..."
-          & "$ckaExe" config -mode manual -set_path "$signtool"
+          $configProc = Start-Process -FilePath "$ckaExe" -ArgumentList "config", "-mode", "manual", "-set_path", "$signtool" -Wait -NoNewWindow -PassThru
+          Write-Host "Config Exit Code: $($configProc.ExitCode)"
           
+          # Attempt Login
           Write-Host "Attempting login..."
-          $loginOutput = & "$ckaExe" login `
-            -username "${{ secrets.SS_USER_NAME }}" `
-            -password "${{ secrets.SS_USER_PASSWORD }}" `
-            -credential_id "${{ secrets.SS_CREDENTIAL_ID }}" `
-            -totp_secret "${{ secrets.SS_TOTP_SECRET }}" `
-            -save 2>&1
+          # We use Start-Process to ensure it's executed as a separate process and we can capture the exit code reliably
+          $loginProc = Start-Process -FilePath "$ckaExe" -ArgumentList "login", "-username", "${{ secrets.SS_USER_NAME }}", "-password", "${{ secrets.SS_USER_PASSWORD }}", "-credential_id", "${{ secrets.SS_CREDENTIAL_ID }}", "-totp_secret", "${{ secrets.SS_TOTP_SECRET }}", "-save" -Wait -NoNewWindow -PassThru
           
-          $loginExitCode = $LASTEXITCODE
-          Write-Host "Login Output: $loginOutput"
-          Write-Host "Login Exit Code: $loginExitCode"
+          Write-Host "Login Exit Code: $($loginProc.ExitCode)"
           
-          if ($loginExitCode -ne 0) {
-            throw "Login failed with exit code $loginExitCode"
+          if ($loginProc.ExitCode -ne 0) {
+            # Try to run with --help to see if arguments are correct
+            Write-Host "Login failed. Showing help for eSignerCKA:"
+            & "$ckaExe" --help
+            throw "Login failed with exit code $($loginProc.ExitCode)"
           }
 
           # Check if eSignerCKATool exists and can show info
-          $ckaTool = Join-Path (Split-Path $ckaExe) "eSignerCKATool.exe"
+          $ckaTool = Join-Path $ckaDir "eSignerCKATool.exe"
           if (Test-Path $ckaTool) {
             Write-Host "Running eSignerCKATool for diagnostics..."
             & "$ckaTool" certificates
