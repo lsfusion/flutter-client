@@ -79,6 +79,8 @@ jobs:
 
           if ($ckaPath -and (Test-Path $ckaPath)) {
             Write-Host "eSignerCKA installed at $ckaPath"
+            Write-Host "Listing files in $ckaPath recursively:"
+            Get-ChildItem -Path $ckaPath -Recurse | Select-Object FullName, Length
             echo "$ckaPath" >> $env:GITHUB_PATH
           } else {
             # Debug: show where it might have been installed
@@ -104,10 +106,12 @@ jobs:
           # We check several possible locations based on logs
           $possiblePaths = @(
             "C:\Program Files (x86)\SSL Corp eSigner CKA\eSignerCKA.exe",
-            "C:\Program Files\SSL Corp eSigner CKA\eSignerCKA.exe",
-            "C:\Program Files (x86)\SSL.com\eSignerCKA\eSignerCKA.exe"
+            "C:\Program Files\SSL Corp eSigner CKA\eSigner.exe",
+            "C:\Program Files\SSL Corp eSigner CKA\eSignerCloudKeyAdapter.exe",
+            "C:\Program Files\SSL Corp eSigner CKA\eSignerCSP.Config.exe",
+            "C:\Program Files (x86)\SSL Corp eSigner CKA\eSigner.exe"
           )
-          
+  
           $ckaExe = $null
           foreach ($path in $possiblePaths) {
             if (Test-Path $path) {
@@ -115,16 +119,23 @@ jobs:
               break
             }
           }
-
+  
           if ($null -eq $ckaExe) {
-            Write-Host "eSignerCKA.exe not found at known paths. Searching..."
-            $ckaExe = Get-ChildItem -Path "C:\Program Files (x86)", "C:\Program Files" -Filter "eSignerCKA.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+            Write-Host "eSignerCKA.exe not found at known paths. Searching for ANY .exe in SSL Corp folder..."
+            $ckaExe = Get-ChildItem -Path "C:\Program Files (x86)\SSL Corp*" -Filter "*.exe" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*eSigner*" } | Select-Object -First 1 -ExpandProperty FullName
           }
-          
+  
           if ($null -eq $ckaExe -or $ckaExe -eq "") {
-            Write-Host "DEBUG: Listing SSL-related directories in Program Files..."
-            Get-ChildItem -Path "C:\Program Files (x86)", "C:\Program Files" -Filter "*SSL*" -ErrorAction SilentlyContinue | Select-Object FullName
-            throw "eSignerCKA.exe could not be located."
+            Write-Host "Still not found. Searching for ANY .exe in all SSL-related folders..."
+            $ckaExe = Get-ChildItem -Path "C:\Program Files (x86)", "C:\Program Files" -Filter "*.exe" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like "*SSL*" -and $_.Name -like "*eSigner*" } | Select-Object -First 1 -ExpandProperty FullName
+          }
+
+          if ($null -eq $ckaExe -or $ckaExe -eq "") {
+            Write-Host "DEBUG: Listing ALL files in SSL Corp directory if it exists..."
+            if (Test-Path "C:\Program Files (x86)\SSL Corp eSigner CKA") {
+               Get-ChildItem -Path "C:\Program Files (x86)\SSL Corp eSigner CKA" -Recurse | Select-Object FullName
+            }
+            throw "eSignerCKA executable could not be located."
           }
           Write-Host "Using eSignerCKA: $ckaExe"
           
