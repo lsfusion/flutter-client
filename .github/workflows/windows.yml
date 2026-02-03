@@ -119,8 +119,17 @@ jobs:
           Write-Host "Signing with signtool..."
           # According to the logs, the provider name is "eSignerKSP"
           # We use /sha1 for precision and /csp "eSignerKSP" as seen in the debug output
-          $thumbprint = (Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object { $_.Subject -like "*Aliaksei*" -or $_.Issuer -like "*SSL*" } | Select-Object -First 1).Thumbprint
+          # We also try to enforce the container name if possible
+          $cert = Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object { $_.Subject -like "*Aliaksei*" -or $_.Issuer -like "*SSL*" } | Select-Object -First 1
+          $thumbprint = $cert.Thumbprint
+          
+          # Try signing with explicit KSP and Thumbprint
           & "$signtool" sign /debug /sha1 "$thumbprint" /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "eSignerKSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" "$signedMsixPath"
+          
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Retrying without explicit /csp and /kc, relying on /a and /sha1..."
+            & "$signtool" sign /debug /a /sha1 "$thumbprint" /fd sha256 /tr http://ts.ssl.com /td sha256 "$signedMsixPath"
+          }
           
           & "$ckaTool" unload
         shell: pwsh
