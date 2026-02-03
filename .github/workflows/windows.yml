@@ -104,16 +104,9 @@ jobs:
           $loadResult = $LASTEXITCODE
           Write-Host "Load Exit Code: $loadResult"
 
-          # Force repair the association between the certificate and the KSP
-          Write-Host "Repairing certificate association..."
-          $cert = Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object { $_.Subject -like "*Aliaksei*" -or $_.Issuer -like "*SSL*" } | Select-Object -First 1
-          if ($cert) {
-            # Note: certutil -repairstore might prompt for a password/interaction if not configured correctly.
-            # We try to use the most non-interactive way.
-            Write-Host "Attempting non-interactive repair for thumbprint $($cert.Thumbprint)..."
-            # Using -f and ensuring no interaction
-            cmd /c "certutil -user -repairstore My `"$($cert.Thumbprint)`""
-          }
+          # Instead of repairstore (which hangs), we'll try to use signtool's own ability 
+          # to find the key by providing the explicit CSP and Key Container from certutil logs.
+          # From logs: Key Container = 4EAA4B484DE51CFE1345AE43421671F6, Provider = eSignerKSP
 
           # Check store for debug
           Write-Host "Current certificates in My store:"
@@ -128,19 +121,11 @@ jobs:
           Copy-Item -Path $msixPath.FullName -Destination $signedMsixPath
           
           Write-Host "Signing with signtool..."
-          # According to the logs, the provider name is "eSignerKSP"
-          # We use /sha1 for precision and /csp "eSignerKSP" as seen in the debug output
-          # We also try to enforce the container name if possible
-          $cert = Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object { $_.Subject -like "*Aliaksei*" -or $_.Issuer -like "*SSL*" } | Select-Object -First 1
-          $thumbprint = $cert.Thumbprint
+          # We use the SHA1 we know and the exact CSP/KC from the certutil output
+          $thumbprint = "7C95453ECC7B8B0F580625F9D0C5E331ED64738D"
+          $keyContainer = "4EAA4B484DE51CFE1345AE43421671F6"
           
-          # Try signing with explicit KSP and Thumbprint
-          & "$signtool" sign /debug /sha1 "$thumbprint" /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "eSignerKSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" "$signedMsixPath"
-          
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "Retrying without explicit /csp and /kc, relying on /a and /sha1..."
-            & "$signtool" sign /debug /a /sha1 "$thumbprint" /fd sha256 /tr http://ts.ssl.com /td sha256 "$signedMsixPath"
-          }
+          & "$signtool" sign /debug /sha1 "$thumbprint" /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "eSignerKSP" /kc "$keyContainer" "$signedMsixPath"
           
           & "$ckaTool" unload
         shell: pwsh
