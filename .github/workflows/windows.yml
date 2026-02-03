@@ -126,11 +126,16 @@ jobs:
           if (!(Test-Path (Split-Path $signedMsixPath))) { New-Item -ItemType Directory -Force -Path (Split-Path $signedMsixPath) }
           Copy-Item -Path $msixPath.FullName -Destination $signedMsixPath
           
-          # 6. Step 7 from guide: Sign using /sha1
+          # 6. Malware Scan (Required by SSL.com if enabled on account)
+          Write-Host "Scanning for malware..."
+          & "$ckaTool" scan -user "$user" -pass "$pass" -totp "$totp_secret" -key "$masterKey" -file "$signedMsixPath"
+          
+          
+          # 7. Step 7 from guide: Sign using /sha1
           Write-Host "Signing..."
           & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /sha1 "$thumbprint" "$signedMsixPath"
           
-          # 7. Cleanup
+          # 8. Cleanup
           & "$ckaTool" unload
         shell: pwsh
 
