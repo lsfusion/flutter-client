@@ -117,7 +117,10 @@ jobs:
           Copy-Item -Path $msixPath.FullName -Destination $signedMsixPath
           
           Write-Host "Signing with signtool..."
-          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "SSL.com KSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" "$signedMsixPath"
+          # According to the logs, the provider name is "eSignerKSP"
+          # We use /sha1 for precision and /csp "eSignerKSP" as seen in the debug output
+          $thumbprint = (Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object { $_.Subject -like "*Aliaksei*" -or $_.Issuer -like "*SSL*" } | Select-Object -First 1).Thumbprint
+          & "$signtool" sign /debug /sha1 "$thumbprint" /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "eSignerKSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" "$signedMsixPath"
           
           & "$ckaTool" unload
         shell: pwsh
