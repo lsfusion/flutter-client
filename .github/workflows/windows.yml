@@ -87,32 +87,28 @@ jobs:
           $ckaTool = Join-Path $ckaDir "eSignerCKATool.exe"
           $masterKey = Join-Path (Get-Location).Path "master.key"
 
-          # Pure SSL.com Guide Approach
+          # 1. Cleanup state to ensure fresh login
+          Write-Host "Cleaning up previous certificates..."
+          & "$ckaTool" unload
+
+          # 2. Config according to the SSL.com guide
           Write-Host "Configuring eSignerCKATool..."
-          # Applying parameters EXACTLY as shown in the SSL.com guide:
-          # -user: Username
-          # -pass: Password
-          # -totp: TOTP Secret
+          # Note: Following the guide parameters exactly: -pass for password, -totp for secret
           & "$ckaTool" config -mode product -user "${{ secrets.SS_USER_NAME }}" -pass "${{ secrets.SS_USER_PASSWORD }}" -totp "${{ secrets.SS_TOTP_SECRET }}" -key "$masterKey" -r
           
-          $configResult = $LASTEXITCODE
-          Write-Host "Config Exit Code: $configResult"
+          Write-Host "Config result code: $LASTEXITCODE"
           
-          Write-Host "Loading certificates..."
+          # 3. Load certificates
+          Write-Host "Loading certificates into store..."
           & "$ckaTool" load
           
-          $loadResult = $LASTEXITCODE
-          Write-Host "Load Exit Code: $loadResult"
+          Write-Host "Load result code: $LASTEXITCODE"
 
-          # Instead of repairstore (which hangs), we'll try to use signtool's own ability 
-          # to find the key by providing the explicit CSP and Key Container from certutil logs.
-          # From logs: Key Container = 4EAA4B484DE51CFE1345AE43421671F6, Provider = eSignerKSP
-
-          # Check store for debug
-          Write-Host "Current certificates in My store:"
+          # 4. Diagnostic Store Check
+          Write-Host "Verifying certificate in My store:"
           certutil -user -store My
           
-          # Prepare file for signing
+          # 5. Prepare file for signing
           $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
           if ($null -eq $msixPath) { throw "MSIX file not found." }
           $signedDir = "build/windows/x64/runner/Release/signed"
@@ -120,13 +116,12 @@ jobs:
           $signedMsixPath = "$signedDir/$($msixPath.Name)"
           Copy-Item -Path $msixPath.FullName -Destination $signedMsixPath
           
-          Write-Host "Signing with signtool..."
-          # We use the SHA1 we know and the exact CSP/KC from the certutil output
-          $thumbprint = "7C95453ECC7B8B0F580625F9D0C5E331ED64738D"
-          $keyContainer = "4EAA4B484DE51CFE1345AE43421671F6"
+          # 6. Sign with signtool
+          Write-Host "Attempting to sign..."
+          # Using the provider name found in logs (eSignerKSP) and the guide's /kc parameter
+          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "eSignerKSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" "$signedMsixPath"
           
-          & "$signtool" sign /debug /sha1 "$thumbprint" /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "eSignerKSP" /kc "$keyContainer" "$signedMsixPath"
-          
+          # 7. Final cleanup
           & "$ckaTool" unload
         shell: pwsh
 
