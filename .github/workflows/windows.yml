@@ -78,52 +78,59 @@ jobs:
 
       - name: Sign MSIX with eSigner CKA
         run: |
-          $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
+          # 1. Use x86 signtool as per SSL.com guide
+          $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\signtool.exe"
           if (!(Test-Path $signtool)) {
-            $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "signtool.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
+            $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "signtool.exe" -Recurse | Where-Object { $_.FullName -like "*\x86\*" } | Select-Object -First 1 -ExpandProperty FullName
           }
+          Write-Host "Using signtool: $signtool"
 
           $ckaDir = "C:\Program Files (x86)\SSL Corp eSigner CKA"
           $ckaTool = Join-Path $ckaDir "eSignerCKATool.exe"
-          $masterKey = Join-Path (Get-Location).Path "master.key"
+          # Use an absolute path for master.key in a common location
+          $masterKey = "C:\master.key"
 
-          # 1. Config according to the SSL.com guide
+          # 2. Config - Following the guide's logic but using the tool's actual flag name (-totp instead of -totp)
           Write-Host "Configuring eSignerCKATool..."
-          & "$ckaTool" config -mode product -user "${{ secrets.SS_USER_NAME }}" -pass "${{ secrets.SS_USER_PASSWORD }}" -totp "${{ secrets.SS_TOTP_SECRET }}" -key "$masterKey" -r
+          $user = "${{ secrets.SS_USER_NAME }}"
+          $pass = "${{ secrets.SS_USER_PASSWORD }}"
+          $totp_secret = "${{ secrets.SS_TOTP_SECRET }}"
           
-          # 2. Unload then Load as per guide order
-          Write-Host "Refreshing certificates (Unload then Load)..."
+          # We use -pass for Password and -totp for TOTP Secret. 
+          # Note: The tool's help has swapped descriptions, but these flag names match the guide's intent.
+          & "$ckaTool" config -mode product -user "$user" -pass "$pass" -totp "$totp_secret" -key "$masterKey" -r
+          
+          # 3. Refresh certificates as per guide
+          Write-Host "Refreshing certificates..."
           & "$ckaTool" unload
           & "$ckaTool" load
           
-          # 3. Step 6 from guide: Select code signing certificate and get thumbprint
+          # 4. Step 6 from guide: Get thumbprint dynamically
           Write-Host "Selecting Certificate From Windows Store..."
           $CodeSigningCert = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert | Select-Object -First 1
           if ($null -eq $CodeSigningCert) {
-             # Fallback to general search if -CodeSigningCert filter is too strict
+             # Fallback if -CodeSigningCert filter is too strict
              $CodeSigningCert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Issuer -like "*SSL*" -or $_.Subject -like "*Aliaksei*" } | Select-Object -First 1
           }
           
           if ($null -eq $CodeSigningCert) {
-            throw "Code signing certificate not found in store."
+            throw "Certificate not found. Login might have failed."
           }
           
           $thumbprint = $CodeSigningCert.Thumbprint
-          Write-Host "Using THUMBPRINT=$thumbprint for certificate $($CodeSigningCert.Subject)"
+          Write-Host "Using THUMBPRINT=$thumbprint ($($CodeSigningCert.Subject))"
 
-          # 4. Prepare file for signing
+          # 5. Prepare file
           $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
-          if ($null -eq $msixPath) { throw "MSIX file not found." }
-          $signedDir = "build/windows/x64/runner/Release/signed"
-          if (!(Test-Path $signedDir)) { New-Item -ItemType Directory -Force -Path $signedDir }
-          $signedMsixPath = "$signedDir/$($msixPath.Name)"
+          $signedMsixPath = "build/windows/x64/runner/Release/signed/$($msixPath.Name)"
+          if (!(Test-Path (Split-Path $signedMsixPath))) { New-Item -ItemType Directory -Force -Path (Split-Path $signedMsixPath) }
           Copy-Item -Path $msixPath.FullName -Destination $signedMsixPath
           
-          # 5. Step 7 from guide: Sign artifact with signtool using /sha1
-          Write-Host "Signing with signtool..."
+          # 6. Step 7 from guide: Sign using /sha1
+          Write-Host "Signing..."
           & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /sha1 "$thumbprint" "$signedMsixPath"
           
-          # 6. Final cleanup
+          # 7. Cleanup
           & "$ckaTool" unload
         shell: pwsh
 
