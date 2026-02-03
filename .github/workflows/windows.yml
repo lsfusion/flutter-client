@@ -104,6 +104,14 @@ jobs:
           $loadResult = $LASTEXITCODE
           Write-Host "Load Exit Code: $loadResult"
 
+          # Force repair the association between the certificate and the KSP
+          Write-Host "Repairing certificate association..."
+          $cert = Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object { $_.Subject -like "*Aliaksei*" -or $_.Issuer -like "*SSL*" } | Select-Object -First 1
+          if ($cert) {
+            # certutil -repairstore will try to link the certificate in the store with the KSP
+            certutil -user -repairstore My "$($cert.Thumbprint)"
+          }
+
           # Check store for debug
           Write-Host "Current certificates in My store:"
           certutil -user -store My
