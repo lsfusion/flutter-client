@@ -108,8 +108,11 @@ jobs:
           Write-Host "Repairing certificate association..."
           $cert = Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object { $_.Subject -like "*Aliaksei*" -or $_.Issuer -like "*SSL*" } | Select-Object -First 1
           if ($cert) {
-            # certutil -repairstore will try to link the certificate in the store with the KSP
-            certutil -user -repairstore My "$($cert.Thumbprint)"
+            # Note: certutil -repairstore might prompt for a password/interaction if not configured correctly.
+            # We try to use the most non-interactive way.
+            Write-Host "Attempting non-interactive repair for thumbprint $($cert.Thumbprint)..."
+            # Using -f and ensuring no interaction
+            cmd /c "certutil -user -repairstore My `"$($cert.Thumbprint)`""
           }
 
           # Check store for debug
