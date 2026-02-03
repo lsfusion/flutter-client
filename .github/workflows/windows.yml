@@ -90,35 +90,28 @@ jobs:
           # Use an absolute path for master.key in a common location
           $masterKey = "C:\master.key"
 
-          # 2. Config - Following the guide's logic but using the tool's actual flag name (-totp instead of -totp)
+          # 2. Config - Using parameters exactly as per SSL.com guide
           Write-Host "Configuring eSignerCKATool..."
           $user = "${{ secrets.SS_USER_NAME }}"
           $pass = "${{ secrets.SS_USER_PASSWORD }}"
           $totp_secret = "${{ secrets.SS_TOTP_SECRET }}"
           
-          # We use -pass for Password and -totp for TOTP Secret. 
-          # Note: The tool's help has swapped descriptions, but these flag names match the guide's intent.
+          # Following the user's instruction: use -pass for password and -totp for TOTP secret.
           & "$ckaTool" config -mode product -user "$user" -pass "$pass" -totp "$totp_secret" -key "$masterKey" -r
           
-          # 3. Refresh certificates as per guide
+          # 3. Refresh certificates
           Write-Host "Refreshing certificates..."
           & "$ckaTool" unload
           & "$ckaTool" load
           
-          # 4. Step 6 from guide: Get thumbprint dynamically
+          # 4. Get thumbprint
           Write-Host "Selecting Certificate From Windows Store..."
           $CodeSigningCert = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert | Select-Object -First 1
           if ($null -eq $CodeSigningCert) {
-             # Fallback if -CodeSigningCert filter is too strict
              $CodeSigningCert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Issuer -like "*SSL*" -or $_.Subject -like "*Aliaksei*" } | Select-Object -First 1
           }
-          
-          if ($null -eq $CodeSigningCert) {
-            throw "Certificate not found. Login might have failed."
-          }
-          
           $thumbprint = $CodeSigningCert.Thumbprint
-          Write-Host "Using THUMBPRINT=$thumbprint ($($CodeSigningCert.Subject))"
+          Write-Host "Using THUMBPRINT=$thumbprint"
 
           # 5. Prepare file
           $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
@@ -126,9 +119,10 @@ jobs:
           if (!(Test-Path (Split-Path $signedMsixPath))) { New-Item -ItemType Directory -Force -Path (Split-Path $signedMsixPath) }
           Copy-Item -Path $msixPath.FullName -Destination $signedMsixPath
           
-          # 6. Step 7 from guide: Sign using /sha1
+          # 6. Sign - using CSP and KC to link credentials
           Write-Host "Signing..."
-          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /sha1 "$thumbprint" "$signedMsixPath"
+          # Note: We use "eSignerKSP" which was confirmed by certutil logs
+          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "eSignerKSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" /sha1 "$thumbprint" "$signedMsixPath"
           
           # 7. Cleanup
           & "$ckaTool" unload
