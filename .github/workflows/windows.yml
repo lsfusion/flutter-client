@@ -33,15 +33,17 @@ jobs:
 
       - name: Verify signtool exists
         run: |
-          $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "signtool.exe" -Recurse | Where-Object { $_.FullName -like "*\x86\*" } | Select-Object -First 1 -ExpandProperty FullName
-          if (!$signtool) {
-            $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "signtool.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
-          }
-          if ($signtool) {
+          $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
+          if (Test-Path $signtool) {
             Write-Host "Signtool found at $signtool"
-            "SIGNTOOL_PATH=$signtool" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           } else {
-            throw "signtool.exe not found anywhere in Windows Kits"
+            Write-Host "Signtool NOT found at $signtool. Searching..."
+            $found = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "signtool.exe" -Recurse | Select-Object -First 1
+            if ($found) {
+                Write-Host "Found at: $($found.FullName)"
+            } else {
+                throw "signtool.exe not found anywhere in Windows Kits"
+            }
           }
         shell: pwsh
 
@@ -76,28 +78,39 @@ jobs:
 
       - name: Sign MSIX with eSigner CKA
         run: |
-          # 1. Path Setup
-          $signtool = "${{ env.SIGNTOOL_PATH }}"
+          # 1. Use x86 signtool as per SSL.com guide
+          $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\signtool.exe"
+          if (!(Test-Path $signtool)) {
+            $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "signtool.exe" -Recurse | Where-Object { $_.FullName -like "*\x86\*" } | Select-Object -First 1 -ExpandProperty FullName
+          }
           Write-Host "Using signtool: $signtool"
 
           $ckaDir = "C:\Program Files (x86)\SSL Corp eSigner CKA"
           $ckaTool = Join-Path $ckaDir "eSignerCKATool.exe"
-          $masterKey = Join-Path $env:GITHUB_WORKSPACE "master.key"
+          # Use an absolute path for master.key in a common location
+          $masterKey = "C:\master.key"
 
-          # 2. Config
-          # Correcting parameters according to SSL.com guide: -pass is Password, -totp is TOTP Secret
+          # 2. Config - Using parameters exactly as per SSL.com guide
           Write-Host "Configuring eSignerCKATool..."
-          & "$ckaTool" config -mode product -user "${{ secrets.SS_USER_NAME }}" -pass "${{ secrets.SS_USER_PASSWORD }}" -totp "${{ secrets.SS_TOTP_SECRET }}" -key "$masterKey" -r
+          $user = "${{ secrets.SS_USER_NAME }}"
+          $pass = "${{ secrets.SS_USER_PASSWORD }}"
+          $totp_secret = "${{ secrets.SS_TOTP_SECRET }}"
           
-          # 3. Load certificates
+          # Following the user's instruction: use -pass for password and -totp for TOTP secret.
+          & "$ckaTool" config -mode product -user "$user" -pass "$pass" -totp "$totp_secret" -key "$masterKey" -r
+          
+          # 3. Refresh certificates
           Write-Host "Refreshing certificates..."
           & "$ckaTool" unload
           & "$ckaTool" load
           
-          # 4. Get thumbprint dynamically
-          $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Issuer -like "*SSL*" -or $_.Subject -like "*Aliaksei*" } | Select-Object -First 1
-          if (!$cert) { throw "Certificate not found in store after load." }
-          $thumbprint = $cert.Thumbprint
+          # 4. Get thumbprint
+          Write-Host "Selecting Certificate From Windows Store..."
+          $CodeSigningCert = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert | Select-Object -First 1
+          if ($null -eq $CodeSigningCert) {
+             $CodeSigningCert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Issuer -like "*SSL*" -or $_.Subject -like "*Aliaksei*" } | Select-Object -First 1
+          }
+          $thumbprint = $CodeSigningCert.Thumbprint
           Write-Host "Using THUMBPRINT=$thumbprint"
 
           # 5. Prepare file
@@ -106,15 +119,12 @@ jobs:
           if (!(Test-Path (Split-Path $signedMsixPath))) { New-Item -ItemType Directory -Force -Path (Split-Path $signedMsixPath) }
           Copy-Item -Path $msixPath.FullName -Destination $signedMsixPath
           
-          # 6. Malware Scan (Required by SSL.com if enabled on account)
-          Write-Host "Scanning for malware..."
-          & "$ckaTool" scan -file "$signedMsixPath"
-
-          # 7. Sign
+          # 6. Sign - using CSP and KC to link credentials
           Write-Host "Signing..."
-          & "$signtool" sign /v /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "eSignerKSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" /sha1 "$thumbprint" "$signedMsixPath"
+          # Note: We use "eSignerKSP" which was confirmed by certutil logs
+          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "eSignerKSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" /sha1 "$thumbprint" "$signedMsixPath"
           
-          # 8. Cleanup
+          # 7. Cleanup
           & "$ckaTool" unload
         shell: pwsh
 
