@@ -87,28 +87,31 @@ jobs:
           $ckaTool = Join-Path $ckaDir "eSignerCKATool.exe"
           $masterKey = Join-Path (Get-Location).Path "master.key"
 
-          # 1. Cleanup state to ensure fresh login
-          Write-Host "Cleaning up previous certificates..."
-          & "$ckaTool" unload
-
-          # 2. Config according to the SSL.com guide
+          # 1. Config according to the SSL.com guide
           Write-Host "Configuring eSignerCKATool..."
-          # Note: Following the guide parameters exactly: -pass for password, -totp for secret
           & "$ckaTool" config -mode product -user "${{ secrets.SS_USER_NAME }}" -pass "${{ secrets.SS_USER_PASSWORD }}" -totp "${{ secrets.SS_TOTP_SECRET }}" -key "$masterKey" -r
           
-          Write-Host "Config result code: $LASTEXITCODE"
-          
-          # 3. Load certificates
-          Write-Host "Loading certificates into store..."
+          # 2. Unload then Load as per guide order
+          Write-Host "Refreshing certificates (Unload then Load)..."
+          & "$ckaTool" unload
           & "$ckaTool" load
           
-          Write-Host "Load result code: $LASTEXITCODE"
-
-          # 4. Diagnostic Store Check
-          Write-Host "Verifying certificate in My store:"
-          certutil -user -store My
+          # 3. Step 6 from guide: Select code signing certificate and get thumbprint
+          Write-Host "Selecting Certificate From Windows Store..."
+          $CodeSigningCert = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert | Select-Object -First 1
+          if ($null -eq $CodeSigningCert) {
+             # Fallback to general search if -CodeSigningCert filter is too strict
+             $CodeSigningCert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Issuer -like "*SSL*" -or $_.Subject -like "*Aliaksei*" } | Select-Object -First 1
+          }
           
-          # 5. Prepare file for signing
+          if ($null -eq $CodeSigningCert) {
+            throw "Code signing certificate not found in store."
+          }
+          
+          $thumbprint = $CodeSigningCert.Thumbprint
+          Write-Host "Using THUMBPRINT=$thumbprint for certificate $($CodeSigningCert.Subject)"
+
+          # 4. Prepare file for signing
           $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
           if ($null -eq $msixPath) { throw "MSIX file not found." }
           $signedDir = "build/windows/x64/runner/Release/signed"
@@ -116,12 +119,11 @@ jobs:
           $signedMsixPath = "$signedDir/$($msixPath.Name)"
           Copy-Item -Path $msixPath.FullName -Destination $signedMsixPath
           
-          # 6. Sign with signtool
-          Write-Host "Attempting to sign..."
-          # Using the provider name found in logs (eSignerKSP) and the guide's /kc parameter
-          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "eSignerKSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" "$signedMsixPath"
+          # 5. Step 7 from guide: Sign artifact with signtool using /sha1
+          Write-Host "Signing with signtool..."
+          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /sha1 "$thumbprint" "$signedMsixPath"
           
-          # 7. Final cleanup
+          # 6. Final cleanup
           & "$ckaTool" unload
         shell: pwsh
 
