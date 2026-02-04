@@ -104,6 +104,8 @@ jobs:
           Write-Host "Refreshing certificates..."
           & "$ckaTool" unload
           & "$ckaTool" load
+          Write-Host "Waiting for KSP to initialize..."
+          Start-Sleep -s 5
           
           # 4. Step 6 from guide: Get thumbprint dynamically
           Write-Host "Selecting Certificate From Windows Store..."
@@ -120,12 +122,37 @@ jobs:
           $thumbprint = $CodeSigningCert.Thumbprint
           Write-Host "Using THUMBPRINT=$thumbprint ($($CodeSigningCert.Subject))"
           
-          # Debug: check if private key is accessible
-          Write-Host "Verifying private key access..."
+          # Debug: Comprehensive Architecture & KSP Diagnostics
+          Write-Host "=== Architecture & KSP Diagnostics ==="
+          Write-Host "Checking for eSigner processes..."
+          Get-Process | Where-Object { $_.Name -like "*eSigner*" } | Select-Object Name, Id, Path
+          
+          Write-Host "Checking for eSigner DLLs..."
+          $paths = @("C:\Windows\System32\eSignerKSP.dll", "C:\Windows\SysWOW64\eSignerKSP.dll")
+          foreach ($p in $paths) {
+            if (Test-Path $p) { Write-Host "Found: $p" } else { Write-Host "Not found: $p" }
+          }
+          
+          Write-Host "Installation Directory Files:"
+          Get-ChildItem -Path "$ckaDir" -Recurse | Select-Object FullName
+          
+          Write-Host "Registry (64-bit):"
+          Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Cryptography\Defaults\Provider\eSignerKSP" -ErrorAction SilentlyContinue | Select-Object ImagePath, "Function Table"
+          
+          Write-Host "Registry (32-bit):"
+          Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Cryptography\Defaults\Provider\eSignerKSP" -ErrorAction SilentlyContinue | Select-Object ImagePath, "Function Table"
+
+          Write-Host "Verifying private key access (64-bit)..."
           certutil -v -silent -user -verifystore My "$thumbprint"
           
-          Write-Host "Checking CSP providers..."
+          Write-Host "Verifying private key access (32-bit)..."
+          & "C:\Windows\SysWOW64\certutil.exe" -v -silent -user -verifystore My "$thumbprint"
+          
+          Write-Host "Checking CSP providers (64-bit)..."
           certutil -csplist
+          
+          Write-Host "Checking CSP providers (32-bit)..."
+          & "C:\Windows\SysWOW64\certutil.exe" -csplist
           
           Write-Host "Repairing store association..."
           certutil -repairstore -user My "$thumbprint"
@@ -135,6 +162,7 @@ jobs:
           
           Write-Host "Checking keys (32-bit)..."
           & "C:\Windows\SysWOW64\certutil.exe" -key -user
+          Write-Host "=== End of Diagnostics ==="
 
           # 5. Prepare file
           $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
