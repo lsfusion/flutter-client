@@ -124,8 +124,17 @@ jobs:
           Write-Host "Verifying private key access..."
           certutil -v -silent -user -verifystore My "$thumbprint"
           
-          Write-Host "Checking keys with certutil -key..."
+          Write-Host "Checking CSP providers..."
+          certutil -csplist
+          
+          Write-Host "Repairing store association..."
+          certutil -repairstore -user My "$thumbprint"
+
+          Write-Host "Checking keys (64-bit)..."
           certutil -key -user
+          
+          Write-Host "Checking keys (32-bit)..."
+          & "C:\Windows\SysWOW64\certutil.exe" -key -user
 
           # 5. Prepare file
           $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
@@ -135,10 +144,9 @@ jobs:
           
           # 6. Step 7 from guide: Sign using /sha1
           Write-Host "Signing..."
-          # In some cases eSignerKSP uses the thumbprint or serial number as the container name.
-          # We'll try using the thumbprint as the key container if Serial Number didn't work.
-          $certSerialNumber = $CodeSigningCert.SerialNumber
-          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "eSignerKSP" /k "$thumbprint" /s My /sha1 "$thumbprint" "$signedMsixPath"
+          # Use Uppercase Serial Number as Key Container name, as seen in certutil output
+          $certSerialNumber = $CodeSigningCert.SerialNumber.ToUpper()
+          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "eSignerKSP" /k "$certSerialNumber" /s My /sha1 "$thumbprint" "$signedMsixPath"
           
           # 7. Cleanup
           & "$ckaTool" unload
