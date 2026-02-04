@@ -78,10 +78,10 @@ jobs:
 
       - name: Sign MSIX with eSigner CKA
         run: |
-          # 1. Use x86 signtool as per SSL.com guide
-          $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\signtool.exe"
+          # 1. Use x64 signtool
+          $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
           if (!(Test-Path $signtool)) {
-            $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "signtool.exe" -Recurse | Where-Object { $_.FullName -like "*\x86\*" } | Select-Object -First 1 -ExpandProperty FullName
+            $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "signtool.exe" -Recurse | Where-Object { $_.FullName -like "*\x64\*" } | Select-Object -First 1 -ExpandProperty FullName
           }
           Write-Host "Using signtool: $signtool"
 
