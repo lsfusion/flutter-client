@@ -86,83 +86,55 @@ jobs:
           Write-Host "Using signtool: $signtool"
 
           $ckaDir = "C:\Program Files (x86)\SSL Corp eSigner CKA"
+          # Update PATH for the current session to help 64-bit KSP find its dependencies
+          $env:Path = "$ckaDir;$ckaDir\x64;" + $env:Path
+          
           $ckaTool = Join-Path $ckaDir "eSignerCKATool.exe"
-          # Use an absolute path for master.key in a common location
           $masterKey = "C:\master.key"
 
-          # 2. Config - Following the guide's logic but using the tool's actual flag name (-totp instead of -totp)
+          # 2. Config & Load
           Write-Host "Configuring eSignerCKATool..."
           $user = "${{ secrets.SS_USER_NAME }}"
           $pass = "${{ secrets.SS_USER_PASSWORD }}"
           $totp_secret = "${{ secrets.SS_TOTP_SECRET }}"
           
-          # We use -pass for Password and -totp for TOTP Secret. 
-          # Note: The tool's help has swapped descriptions, but these flag names match the guide's intent.
           & "$ckaTool" config -mode product -user "$user" -pass "$pass" -totp "$totp_secret" -key "$masterKey" -r
           
-          # 3. Refresh certificates as per guide
           Write-Host "Refreshing certificates..."
           & "$ckaTool" unload
           & "$ckaTool" load
-          Write-Host "Waiting for KSP to initialize..."
-          Start-Sleep -s 5
           
-          # 4. Step 6 from guide: Get thumbprint dynamically
+          # Start the background agent if it exists (may be needed for KSP session)
+          Write-Host "Starting eSignerCKA agent..."
+          if (Test-Path "$ckaDir\eSignerCKA.exe") {
+             Start-Process -FilePath "$ckaDir\eSignerCKA.exe" -ArgumentList "/minimized" -ErrorAction SilentlyContinue
+          }
+
+          Write-Host "Waiting for KSP to initialize..."
+          Start-Sleep -s 10
+          
+          # 4. Get thumbprint dynamically
           Write-Host "Selecting Certificate From Windows Store..."
           $CodeSigningCert = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert | Select-Object -First 1
           if ($null -eq $CodeSigningCert) {
-             # Fallback if -CodeSigningCert filter is too strict
              $CodeSigningCert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Issuer -like "*SSL*" -or $_.Subject -like "*Aliaksei*" } | Select-Object -First 1
           }
           
           if ($null -eq $CodeSigningCert) {
-            throw "Certificate not found. Login might have failed."
+            throw "Certificate not found."
           }
           
           $thumbprint = $CodeSigningCert.Thumbprint
+          $certSerialNumber = $CodeSigningCert.SerialNumber.ToUpper()
           Write-Host "Using THUMBPRINT=$thumbprint ($($CodeSigningCert.Subject))"
           
-          # Debug: Comprehensive Architecture & KSP Diagnostics
-          Write-Host "=== Architecture & KSP Diagnostics ==="
-          Write-Host "Checking for eSigner processes..."
-          Get-Process | Where-Object { $_.Name -like "*eSigner*" } | Select-Object Name, Id, Path
-          
-          Write-Host "Checking for eSigner DLLs..."
-          $paths = @("C:\Windows\System32\eSignerKSP.dll", "C:\Windows\SysWOW64\eSignerKSP.dll")
-          foreach ($p in $paths) {
-            if (Test-Path $p) { Write-Host "Found: $p" } else { Write-Host "Not found: $p" }
-          }
-          
-          Write-Host "Installation Directory Files:"
-          Get-ChildItem -Path "$ckaDir" -Recurse | Select-Object FullName
-          
-          Write-Host "Registry (64-bit):"
-          Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Cryptography\Defaults\Provider\eSignerKSP" -ErrorAction SilentlyContinue | Select-Object ImagePath, "Function Table"
-          
-          Write-Host "Registry (32-bit):"
-          Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Cryptography\Defaults\Provider\eSignerKSP" -ErrorAction SilentlyContinue | Select-Object ImagePath, "Function Table"
-
-          Write-Host "Verifying private key access (64-bit)..."
-          certutil -v -silent -user -verifystore My "$thumbprint"
-          
-          Write-Host "Verifying private key access (32-bit)..."
-          & "C:\Windows\SysWOW64\certutil.exe" -v -silent -user -verifystore My "$thumbprint"
-          
-          Write-Host "Checking CSP providers (64-bit)..."
-          certutil -csplist
-          
-          Write-Host "Checking CSP providers (32-bit)..."
-          & "C:\Windows\SysWOW64\certutil.exe" -csplist
-          
+          # Association Repair
           Write-Host "Repairing store association..."
           certutil -repairstore -user My "$thumbprint"
-
-          Write-Host "Checking keys (64-bit)..."
-          certutil -key -user
           
-          Write-Host "Checking keys (32-bit)..."
-          & "C:\Windows\SysWOW64\certutil.exe" -key -user
-          Write-Host "=== End of Diagnostics ==="
+          # Diagnostic
+          Write-Host "Verifying private key access (64-bit)..."
+          certutil -v -silent -user -verifystore My "$thumbprint"
 
           # 5. Prepare file
           $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
@@ -170,10 +142,8 @@ jobs:
           if (!(Test-Path (Split-Path $signedMsixPath))) { New-Item -ItemType Directory -Force -Path (Split-Path $signedMsixPath) }
           Copy-Item -Path $msixPath.FullName -Destination $signedMsixPath
           
-          # 6. Step 7 from guide: Sign using /sha1
+          # 6. Sign using /sha1 and explicit KSP provider
           Write-Host "Signing..."
-          # Use Uppercase Serial Number as Key Container name, as seen in certutil output
-          $certSerialNumber = $CodeSigningCert.SerialNumber.ToUpper()
           & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "eSignerKSP" /k "$certSerialNumber" /s My /sha1 "$thumbprint" "$signedMsixPath"
           
           # 7. Cleanup
