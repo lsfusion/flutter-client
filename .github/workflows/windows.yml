@@ -128,7 +128,7 @@ jobs:
           
           # 6. Step 7 from guide: Sign using /sha1
           Write-Host "Signing..."
-          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /sha1 "$thumbprint" "$signedMsixPath"
+          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "eSignerKSP" /kc "${{ secrets.SS_CREDENTIAL_ID }}" /sha1 "$thumbprint" "$signedMsixPath"
           
           # 7. Cleanup
           & "$ckaTool" unload
