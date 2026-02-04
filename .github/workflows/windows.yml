@@ -130,7 +130,8 @@ jobs:
           Write-Host "Signing..."
           # Get Serial Number/Key Container from the certificate
           $certSerialNumber = $CodeSigningCert.SerialNumber
-          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "eSignerKSP" /k "$certSerialNumber" /sm /sha1 "$thumbprint" "$signedMsixPath"
+          # Removing /sm as it might be looking in the wrong store. Added /s My to specify Personal store.
+          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "eSignerKSP" /k "$certSerialNumber" /s My /sha1 "$thumbprint" "$signedMsixPath"
           
           # 7. Cleanup
           & "$ckaTool" unload
