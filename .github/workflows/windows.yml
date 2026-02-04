@@ -135,10 +135,10 @@ jobs:
           
           # 6. Step 7 from guide: Sign using /sha1
           Write-Host "Signing..."
-          # Get Serial Number/Key Container from the certificate
+          # In some cases eSignerKSP uses the thumbprint or serial number as the container name.
+          # We'll try using the thumbprint as the key container if Serial Number didn't work.
           $certSerialNumber = $CodeSigningCert.SerialNumber
-          # Removing /sm as it might be looking in the wrong store. Added /s My to specify Personal store.
-          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "eSignerKSP" /k "$certSerialNumber" /s My /sha1 "$thumbprint" "$signedMsixPath"
+          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "eSignerKSP" /k "$thumbprint" /s My /sha1 "$thumbprint" "$signedMsixPath"
           
           # 7. Cleanup
           & "$ckaTool" unload
