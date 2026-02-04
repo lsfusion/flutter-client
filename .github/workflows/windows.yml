@@ -120,13 +120,6 @@ jobs:
           $thumbprint = $CodeSigningCert.Thumbprint
           Write-Host "Using THUMBPRINT=$thumbprint ($($CodeSigningCert.Subject))"
           
-          # Debug: check if private key is accessible
-          Write-Host "Verifying private key access..."
-          certutil -v -silent -user -verifystore My "$thumbprint"
-          
-          Write-Host "Checking keys with certutil -key..."
-          certutil -key -user
-
           # 5. Prepare file
           $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
           $signedMsixPath = "build/windows/x64/runner/Release/signed/$($msixPath.Name)"
@@ -135,17 +128,12 @@ jobs:
           
           # 6. Step 7 from guide: Sign using /sha1
           Write-Host "Signing..."
-          # Try adding /csp "eSignerKSP" and /sm to help x64 signtool find the private key
-          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "eSignerKSP" /sm /sha1 "$thumbprint" "$signedMsixPath"
+          # Get Serial Number/Key Container from the certificate
+          $certSerialNumber = $CodeSigningCert.SerialNumber
+          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "eSignerKSP" /k "$certSerialNumber" /sm /sha1 "$thumbprint" "$signedMsixPath"
           
           # 7. Cleanup
           & "$ckaTool" unload
-        shell: pwsh
-
-      - name: List Certificates (Debug)
-        if: always()
-        run: |
-          Get-ChildItem -Path Cert:\CurrentUser\My | Select-Object Subject, Issuer, Thumbprint, EnhancedKeyUsageList | Format-List
         shell: pwsh
 
       - name: Upload Windows build
