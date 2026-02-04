@@ -120,6 +120,13 @@ jobs:
           $thumbprint = $CodeSigningCert.Thumbprint
           Write-Host "Using THUMBPRINT=$thumbprint ($($CodeSigningCert.Subject))"
           
+          # Debug: check if private key is accessible
+          Write-Host "Verifying private key access..."
+          certutil -v -silent -user -verifystore My "$thumbprint"
+          
+          Write-Host "Checking keys with certutil -key..."
+          certutil -key -user
+
           # 5. Prepare file
           $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
           $signedMsixPath = "build/windows/x64/runner/Release/signed/$($msixPath.Name)"
