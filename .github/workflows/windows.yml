@@ -118,7 +118,7 @@ jobs:
           }
           
           $thumbprint = $CodeSigningCert.Thumbprint
-          Write-Host "Using THUMBPRINT=$thumbprint
+          Write-Host "Using THUMBPRINT=$thumbprint"
 
           # 5. Prepare file
           $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
