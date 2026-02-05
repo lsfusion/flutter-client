@@ -29,7 +29,7 @@ jobs:
 
       - name: Create MSIX Installer
         run: dart run msix:create
-        shell: pwsh
+        shell: powershell
 
       - name: Verify signtool exists
         run: |
@@ -45,7 +45,7 @@ jobs:
                 throw "signtool.exe not found anywhere in Windows Kits"
             }
           }
-        shell: pwsh
+        shell: powershell
 
       - name: Setup eSigner CKA
         run: |
@@ -74,7 +74,7 @@ jobs:
           } else {
             throw "eSignerCKA installation failed. Directory not found."
           }
-        shell: pwsh
+        shell: powershell
 
       - name: Setup CodeSignTool
         run: |
@@ -89,7 +89,7 @@ jobs:
           }
           Write-Host "CodeSignTool.jar found at: $($jarPath.FullName)"
           echo "CODESIGNTOOL_JAR=$($jarPath.FullName)" >> $env:GITHUB_ENV
-        shell: pwsh
+        shell: powershell
 
       - name: Sign MSIX with eSigner CKA
         run: |
@@ -152,7 +152,7 @@ jobs:
           
           # 7. Cleanup
           & "$ckaTool" unload
-        shell: pwsh
+        shell: powershell
 
       - name: Upload Windows build
         uses: actions/upload-artifact@v4
