@@ -81,8 +81,12 @@ jobs:
           $url = "https://www.ssl.com/download/codesigntool-for-windows/"
           curl.exe -L $url -o CodeSignTool.zip
           Expand-Archive -Path CodeSignTool.zip -DestinationPath CodeSignTool
-          $jarPath = Get-ChildItem -Path CodeSignTool -Filter "CodeSignTool.jar" -Recurse | Select-Object -First 1
-          if ($null -eq $jarPath) { throw "CodeSignTool.jar not found." }
+          $jarPath = Get-ChildItem -Path CodeSignTool -Filter "*.jar" -Recurse | Select-Object -First 1
+          if ($null -eq $jarPath) { 
+            Write-Host "Contents of CodeSignTool directory:"
+            Get-ChildItem -Path CodeSignTool -Recurse
+            throw "CodeSignTool.jar not found." 
+          }
           Write-Host "CodeSignTool.jar found at: $($jarPath.FullName)"
           echo "CODESIGNTOOL_JAR=$($jarPath.FullName)" >> $env:GITHUB_ENV
         shell: pwsh
