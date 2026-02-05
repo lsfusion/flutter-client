@@ -137,11 +137,10 @@ jobs:
           
           # 5. Malware Scan via CodeSignTool (scan_code command) - KEEPING THIS AS REQUESTED
           Write-Host "Scanning file for malware via CodeSignTool..."
-          $credInfo = java -jar $env:CODESIGNTOOL_JAR get_credentials -username "$user" -password "$pass" -totp_secret "$totp_secret"
-          $credentialId = ($credInfo | Select-String -Pattern 'Credential ID: ([\w\-]+)' | ForEach-Object { $_.Matches.Groups[1].Value }).Trim()
+          $credentialId = "${{ secrets.SS_CREDENTIAL_ID }}"
+          
           if (!$credentialId) {
-             Write-Host "Debug output: $credInfo"
-             throw "Could not find Credential ID in CodeSignTool output."
+             throw "Secret SS_CREDENTIAL_ID is not configured in GitHub Actions."
           }
           Write-Host "Using Credential ID: $credentialId"
           
