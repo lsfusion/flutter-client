@@ -144,7 +144,7 @@ jobs:
           }
           Write-Host "Using Credential ID: $credentialId"
           
-          java -jar $env:CODESIGNTOOL_JAR scan_code -input_file_path "$signedMsixPath" -username "$user" -password "$pass" -totp_secret "$totp_secret" -credential_id "$credentialId"
+          java -jar $env:CODESIGNTOOL_JAR scan_code -input_file_path "$signedMsixPath" -username "$user" -password "$pass" -program_name "lsFusion" -credential_id "$credentialId"
 
           # 6. Sign
           Write-Host "Signing..."
