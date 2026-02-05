@@ -104,11 +104,11 @@ jobs:
           & "$ckaTool" unload
           & "$ckaTool" load
           
-          # Start the background agent if it exists (may be needed for KSP session)
-          # Write-Host "Starting eSignerCKA agent..."
-          # if (Test-Path "$ckaDir\eSignerCKA.exe") {
-          #    Start-Process -FilePath "$ckaDir\eSignerCKA.exe" -ArgumentList "/minimized" -ErrorAction SilentlyContinue
-          # }
+          # Start the background agent if it exists (needed for KSP session)
+          Write-Host "Starting eSignerCKA agent..."
+          if (Test-Path "$ckaDir\eSignerCKA.exe") {
+             Start-Process -FilePath "$ckaDir\eSignerCKA.exe" -ArgumentList "/minimized" -ErrorAction SilentlyContinue
+          }
 
           Write-Host "Waiting for KSP to initialize..."
           Start-Sleep -s 10
