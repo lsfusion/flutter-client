@@ -105,10 +105,10 @@ jobs:
           & "$ckaTool" load
           
           # Start the background agent if it exists (may be needed for KSP session)
-          Write-Host "Starting eSignerCKA agent..."
-          if (Test-Path "$ckaDir\eSignerCKA.exe") {
-             Start-Process -FilePath "$ckaDir\eSignerCKA.exe" -ArgumentList "/minimized" -ErrorAction SilentlyContinue
-          }
+          # Write-Host "Starting eSignerCKA agent..."
+          # if (Test-Path "$ckaDir\eSignerCKA.exe") {
+          #    Start-Process -FilePath "$ckaDir\eSignerCKA.exe" -ArgumentList "/minimized" -ErrorAction SilentlyContinue
+          # }
 
           Write-Host "Waiting for KSP to initialize..."
           Start-Sleep -s 10
@@ -128,13 +128,13 @@ jobs:
           $certSerialNumber = $CodeSigningCert.SerialNumber.ToUpper()
           Write-Host "Using THUMBPRINT=$thumbprint ($($CodeSigningCert.Subject))"
           
-          # Association Repair
-          Write-Host "Repairing store association..."
-          certutil -repairstore -user My "$thumbprint"
+          # Association Repair (Removed as it can hang in CI)
+          # Write-Host "Repairing store association..."
+          # certutil -repairstore -user My "$thumbprint"
           
           # Diagnostic
           Write-Host "Verifying private key access (64-bit)..."
-          certutil -v -silent -user -verifystore My "$thumbprint"
+          certutil -silent -user -verifystore My "$thumbprint"
 
           # 5. Prepare file
           $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
