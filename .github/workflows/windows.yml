@@ -78,7 +78,7 @@ jobs:
 
       - name: Setup CodeSignTool
         run: |
-          $url = "https://www.ssl.com/download/ssl-com-codesigntool/"
+          $url = "https://www.ssl.com/download/codesigntool-for-windows/"
           curl.exe -L $url -o CodeSignTool.zip
           Expand-Archive -Path CodeSignTool.zip -DestinationPath CodeSignTool
           $jarPath = Get-ChildItem -Path CodeSignTool -Filter "CodeSignTool.jar" -Recurse | Select-Object -First 1
