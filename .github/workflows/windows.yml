@@ -78,15 +78,15 @@ jobs:
 
       - name: Sign MSIX with eSigner CKA
         run: |
-          # 1. Use x64 signtool
-          $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
+          # 1. Use x86 signtool (more compatible with eSignerKSP in CI)
+          $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\signtool.exe"
           if (!(Test-Path $signtool)) {
-            $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "signtool.exe" -Recurse | Where-Object { $_.FullName -like "*\x64\*" } | Select-Object -First 1 -ExpandProperty FullName
+            $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "signtool.exe" -Recurse | Where-Object { $_.FullName -like "*\x86\*" } | Select-Object -First 1 -ExpandProperty FullName
           }
           Write-Host "Using signtool: $signtool"
 
           $ckaDir = "C:\Program Files (x86)\SSL Corp eSigner CKA"
-          # Update PATH for the current session to help 64-bit KSP find its dependencies
+          # Update PATH for the current session to help KSP find its dependencies
           $env:Path = "$ckaDir;$ckaDir\x64;" + $env:Path
           
           $ckaTool = Join-Path $ckaDir "eSignerCKATool.exe"
@@ -103,15 +103,9 @@ jobs:
           Write-Host "Refreshing certificates..."
           & "$ckaTool" unload
           & "$ckaTool" load
-          
-          # Start the background agent if it exists (needed for KSP session)
-          Write-Host "Starting eSignerCKA agent..."
-          if (Test-Path "$ckaDir\eSignerCKA.exe") {
-             Start-Process -FilePath "$ckaDir\eSignerCKA.exe" -ArgumentList "/minimized" -ErrorAction SilentlyContinue
-          }
 
           Write-Host "Waiting for KSP to initialize..."
-          Start-Sleep -s 10
+          Start-Sleep -s 15
           
           # 4. Get thumbprint dynamically
           Write-Host "Selecting Certificate From Windows Store..."
@@ -125,28 +119,23 @@ jobs:
           }
           
           $thumbprint = $CodeSigningCert.Thumbprint
-          $certSerialNumber = $CodeSigningCert.SerialNumber.ToUpper()
           Write-Host "Using THUMBPRINT=$thumbprint ($($CodeSigningCert.Subject))"
           
-          # Association Repair (Removed as it can hang in CI)
-          # Write-Host "Repairing store association..."
-          # certutil -repairstore -user My "$thumbprint"
-          
-          # Diagnostic
-          Write-Host "Verifying private key access (64-bit)..."
-          certutil -silent -user -verifystore My "$thumbprint"
-
           # 5. Prepare file
           $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
           $signedMsixPath = "build/windows/x64/runner/Release/signed/$($msixPath.Name)"
           if (!(Test-Path (Split-Path $signedMsixPath))) { New-Item -ItemType Directory -Force -Path (Split-Path $signedMsixPath) }
           Copy-Item -Path $msixPath.FullName -Destination $signedMsixPath
           
-          # 6. Sign using /sha1 and explicit KSP provider
+          # 6. Malware Scan (Required for certificates with malware protection enabled)
+          Write-Host "Scanning file for malware..."
+          & "$ckaTool" scan -input "$signedMsixPath"
+
+          # 7. Sign using /sha1
           Write-Host "Signing..."
-          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /csp "eSignerKSP" /k "$certSerialNumber" /s My /sha1 "$thumbprint" "$signedMsixPath"
+          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /sha1 "$thumbprint" "$signedMsixPath"
           
-          # 7. Cleanup
+          # 8. Cleanup
           & "$ckaTool" unload
         shell: pwsh
 
