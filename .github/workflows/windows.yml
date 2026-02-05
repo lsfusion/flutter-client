@@ -33,7 +33,7 @@ jobs:
 
       - name: Verify signtool exists
         run: |
-          $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
+          $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\signtool.exe"
           if (Test-Path $signtool) {
             Write-Host "Signtool found at $signtool"
           } else {
@@ -76,6 +76,17 @@ jobs:
           }
         shell: pwsh
 
+      - name: Setup CodeSignTool
+        run: |
+          $url = "https://www.ssl.com/download/ssl-com-codesigntool/"
+          curl.exe -L $url -o CodeSignTool.zip
+          Expand-Archive -Path CodeSignTool.zip -DestinationPath CodeSignTool
+          $jarPath = Get-ChildItem -Path CodeSignTool -Filter "CodeSignTool.jar" -Recurse | Select-Object -First 1
+          if ($null -eq $jarPath) { throw "CodeSignTool.jar not found." }
+          Write-Host "CodeSignTool.jar found at: $($jarPath.FullName)"
+          echo "CODESIGNTOOL_JAR=$($jarPath.FullName)" >> $env:GITHUB_ENV
+        shell: pwsh
+
       - name: Sign MSIX with eSigner CKA
         run: |
           # 1. Use x86 signtool (more compatible with eSignerKSP in CI)
@@ -86,11 +97,9 @@ jobs:
           Write-Host "Using signtool: $signtool"
 
           $ckaDir = "C:\Program Files (x86)\SSL Corp eSigner CKA"
-          # Update PATH for the current session to help KSP find its dependencies
-          $env:Path = "$ckaDir;$ckaDir\x64;" + $env:Path
           
           $ckaTool = Join-Path $ckaDir "eSignerCKATool.exe"
-          $masterKey = "C:\master.key"
+          $masterKey = Join-Path (Get-Location) "master.key"
 
           # 2. Config & Load
           Write-Host "Configuring eSignerCKATool..."
@@ -107,35 +116,38 @@ jobs:
           Write-Host "Waiting for KSP to initialize..."
           Start-Sleep -s 15
           
-          # 4. Get thumbprint dynamically
-          Write-Host "Selecting Certificate From Windows Store..."
+          # 3. Get thumbprint
           $CodeSigningCert = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert | Select-Object -First 1
           if ($null -eq $CodeSigningCert) {
              $CodeSigningCert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Issuer -like "*SSL*" -or $_.Subject -like "*Aliaksei*" } | Select-Object -First 1
           }
-          
-          if ($null -eq $CodeSigningCert) {
-            throw "Certificate not found."
-          }
-          
+          if ($null -eq $CodeSigningCert) { throw "Certificate not found." }
           $thumbprint = $CodeSigningCert.Thumbprint
           Write-Host "Using THUMBPRINT=$thumbprint ($($CodeSigningCert.Subject))"
           
-          # 5. Prepare file
+          # 4. Prepare file
           $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
           $signedMsixPath = "build/windows/x64/runner/Release/signed/$($msixPath.Name)"
           if (!(Test-Path (Split-Path $signedMsixPath))) { New-Item -ItemType Directory -Force -Path (Split-Path $signedMsixPath) }
           Copy-Item -Path $msixPath.FullName -Destination $signedMsixPath
           
-          # 6. Malware Scan (Required for certificates with malware protection enabled)
-          Write-Host "Scanning file for malware..."
-          & "$ckaTool" scan -input "$signedMsixPath"
+          # 5. Malware Scan via CodeSignTool (scan_code command) - KEEPING THIS AS REQUESTED
+          Write-Host "Scanning file for malware via CodeSignTool..."
+          $credInfo = java -jar $env:CODESIGNTOOL_JAR get_credentials -username "$user" -password "$pass" -totp_secret "$totp_secret"
+          $credentialId = ($credInfo | Select-String -Pattern 'Credential ID: ([\w\-]+)' | ForEach-Object { $_.Matches.Groups[1].Value }).Trim()
+          if (!$credentialId) {
+             Write-Host "Debug output: $credInfo"
+             throw "Could not find Credential ID in CodeSignTool output."
+          }
+          Write-Host "Using Credential ID: $credentialId"
+          
+          java -jar $env:CODESIGNTOOL_JAR scan_code -input_file_path "$signedMsixPath" -username "$user" -password "$pass" -totp_secret "$totp_secret" -credential_id "$credentialId"
 
-          # 7. Sign using /sha1
+          # 6. Sign
           Write-Host "Signing..."
           & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /sha1 "$thumbprint" "$signedMsixPath"
           
-          # 8. Cleanup
+          # 7. Cleanup
           & "$ckaTool" unload
         shell: pwsh
 
