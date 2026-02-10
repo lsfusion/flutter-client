@@ -61,7 +61,7 @@ dev_dependencies:
 msix_config:
   display_name: lsFusion Flutter client
   publisher_display_name: lsFusion
-  publisher: CN=Aliaksei Kirkouski
+  publisher: CN=Aliaksei Kirkouski, O=Aliaksei Kirkouski, L=Warsaw, S=Masovian Voivodeship, C=PL
   identity_name: com.lsfusion.flutterclient
   msix_version: 1.0.0.0
   capabilities: internetClient
