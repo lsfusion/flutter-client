@@ -87,7 +87,7 @@ jobs:
           $signedMsixPath = Join-Path $signedDir $msixPath.Name
           
           # Sign
-          & "$env:SIGNTOOL_PATH" sign /fd sha256 /tr http://ts.ssl.com /td sha256 /sha1 "$($CodeSigningCert.Thumbprint)" /as /v "$($msixPath.FullName)"
+          & "$env:SIGNTOOL_PATH" sign /fd sha256 /tr http://ts.ssl.com /td sha256 /sha1 "$($CodeSigningCert.Thumbprint)" "$($msixPath.FullName)"
           
           # Move to signed folder for artifact upload
           Move-Item -Path "$($msixPath.FullName)" -Destination "$signedMsixPath" -Force
