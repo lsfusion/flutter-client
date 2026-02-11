@@ -31,20 +31,13 @@ jobs:
         run: dart run msix:create
         shell: pwsh
 
-      - name: Verify signtool exists
+      - name: Setup signtool
         run: |
-          $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
-          if (Test-Path $signtool) {
-            Write-Host "Signtool found at $signtool"
-          } else {
-            Write-Host "Signtool NOT found at $signtool. Searching..."
-            $found = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "signtool.exe" -Recurse | Select-Object -First 1
-            if ($found) {
-                Write-Host "Found at: $($found.FullName)"
-            } else {
-                throw "signtool.exe not found anywhere in Windows Kits"
-            }
-          }
+          $kitPath = "C:\Program Files (x86)\Windows Kits\10\bin"
+          $signtool = Get-ChildItem -Path $kitPath -Filter "signtool.exe" -Recurse | Where-Object { $_.FullName -like "*\x86\*" } | Sort-Object FullName -Descending | Select-Object -First 1
+          if ($null -eq $signtool) { throw "signtool.exe not found" }
+          Write-Host "Using signtool: $($signtool.FullName)"
+          echo "SIGNTOOL_PATH=$($signtool.FullName)" >> $env:GITHUB_ENV
         shell: pwsh
 
       - name: Setup eSigner CKA
@@ -52,98 +45,59 @@ jobs:
           $url = "https://www.ssl.com/download/ssl-com-esigner-cka/"
           curl.exe -L $url -o eSignerCKA_Setup.zip
           Expand-Archive -Path eSignerCKA_Setup.zip -DestinationPath eSignerCKA_Setup
-          
           $exePath = Get-ChildItem -Path eSignerCKA_Setup -Filter "*.exe" -Recurse | Select-Object -First 1
-          if ($null -eq $exePath) { throw "eSignerCKA EXE not found." }
           
           Write-Host "Installing eSigner CKA..."
           Start-Process -FilePath $exePath.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/LOG=install.log" -Wait
           
           $ckaPath = "C:\Program Files (x86)\SSL Corp eSigner CKA"
           if (!(Test-Path $ckaPath)) {
-            $ckaPath = Get-ChildItem -Path "C:\Program Files (x86)", "C:\Program Files" -Filter "*SSL Corp*" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+            $ckaPath = Get-ChildItem -Path "C:\Program Files (x86)" -Filter "SSL Corp eSigner CKA" -Directory -Recurse | Select-Object -First 1 -ExpandProperty FullName
           }
           
-          if ($ckaPath -and (Test-Path $ckaPath)) {
-            # Rename for easy use in command line
-            if (Test-Path "$ckaPath\eSigner CKA.exe") {
-              Move-Item "$ckaPath\eSigner CKA.exe" "$ckaPath\eSignerCKA.exe" -Force
-            }
-            Write-Host "eSignerCKA installed at $ckaPath"
-            echo "$ckaPath" >> $env:GITHUB_PATH
-          } else {
-            throw "eSignerCKA installation failed. Directory not found."
+          if ($null -eq $ckaPath) { throw "eSignerCKA installation failed" }
+          
+          # Rename for easy use in command line
+          if (Test-Path "$ckaPath\eSigner CKA.exe") {
+            Move-Item "$ckaPath\eSigner CKA.exe" "$ckaPath\eSignerCKA.exe" -Force
           }
+          Write-Host "eSignerCKA installed at $ckaPath"
+          echo "$ckaPath" >> $env:GITHUB_PATH
+          echo "CKA_DIR=$ckaPath" >> $env:GITHUB_ENV
         shell: pwsh
 
       - name: Sign MSIX with eSigner CKA
         run: |
-          # 1. Use x86 signtool as per SSL.com guide
-          $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\signtool.exe"
-          if (!(Test-Path $signtool)) {
-            $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Filter "signtool.exe" -Recurse | Where-Object { $_.FullName -like "*\x86\*" } | Select-Object -First 1 -ExpandProperty FullName
-          }
-          Write-Host "Using signtool: $signtool"
-
-          $ckaDir = "C:\Program Files (x86)\SSL Corp eSigner CKA"
-          $ckaTool = Join-Path $ckaDir "eSignerCKATool.exe"
-          # Use an absolute path for master.key in a common location
+          $ckaTool = Join-Path "$env:CKA_DIR" "eSignerCKATool.exe"
           $masterKey = "C:\master.key"
 
-          # 2. Config - Following the guide's logic but using the tool's actual flag name (-totp instead of -totp)
           Write-Host "Configuring eSignerCKATool..."
-          $user = "${{ secrets.SS_USER_NAME }}"
-          $pass = "${{ secrets.SS_USER_PASSWORD }}"
-          $totp_secret = "${{ secrets.SS_TOTP_SECRET }}"
+          & "$ckaTool" config -mode product -user "${{ secrets.SS_USER_NAME }}" -pass "${{ secrets.SS_USER_PASSWORD }}" -totp "${{ secrets.SS_TOTP_SECRET }}" -key "$masterKey" -r
           
-          # We use -pass for Password and -totp for TOTP Secret. 
-          # Note: The tool's help has swapped descriptions, but these flag names match the guide's intent.
-          & "$ckaTool" config -mode product -user "$user" -pass "$pass" -totp "$totp_secret" -key "$masterKey" -r
-          
-          # 3. Refresh certificates as per guide
-          Write-Host "Refreshing certificates..."
+          # Refresh certificates as per guide
           & "$ckaTool" unload
           & "$ckaTool" load
           
-          # 4. Step 6 from guide: Get thumbprint dynamically
-          Write-Host "Selecting Certificate From Windows Store..."
-          $CodeSigningCert = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert | Select-Object -First 1
-          if ($null -eq $CodeSigningCert) {
-             # Fallback if -CodeSigningCert filter is too strict
-             $CodeSigningCert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Issuer -like "*SSL*" -or $_.Subject -like "*Aliaksei*" } | Select-Object -First 1
-          }
+          $CodeSigningCert = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert | Where-Object { $_.Issuer -like "*SSL.com Code Signing*" } | Select-Object -First 1
+          if ($null -eq $CodeSigningCert) { throw "Certificate not found." }
           
-          if ($null -eq $CodeSigningCert) {
-            throw "Certificate not found. Login might have failed."
-          }
-          
-          $thumbprint = $CodeSigningCert.Thumbprint
-          Write-Host "Using THUMBPRINT=$thumbprint ($($CodeSigningCert.Subject))"
-
-          # 5. Prepare file
           $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
-          $signedMsixPath = "build/windows/x64/runner/Release/signed/$($msixPath.Name)"
-          if (!(Test-Path (Split-Path $signedMsixPath))) { New-Item -ItemType Directory -Force -Path (Split-Path $signedMsixPath) }
-          Copy-Item -Path $msixPath.FullName -Destination $signedMsixPath
+          $signedDir = "build/windows/x64/runner/Release/signed"
+          if (!(Test-Path $signedDir)) { New-Item -ItemType Directory -Force -Path $signedDir }
+          $signedMsixPath = Join-Path $signedDir $msixPath.Name
           
-          # 6. Step 7 from guide: Sign using /sha1
-          Write-Host "Signing..."
-          & "$signtool" sign /debug /fd sha256 /tr http://ts.ssl.com /td sha256 /sha1 "$thumbprint" "$signedMsixPath"
+          # Sign
+          & "$env:SIGNTOOL_PATH" sign /fd sha256 /tr http://ts.ssl.com /td sha256 /sha1 "$($CodeSigningCert.Thumbprint)" /as /v "$($msixPath.FullName)"
           
-          # 7. Cleanup
+          # Move to signed folder for artifact upload
+          Move-Item -Path "$($msixPath.FullName)" -Destination "$signedMsixPath" -Force
+          
+          # Cleanup
           & "$ckaTool" unload
-        shell: pwsh
-
-      - name: List Certificates (Debug)
-        if: always()
-        run: |
-          Get-ChildItem -Path Cert:\CurrentUser\My | Select-Object Subject, Issuer, Thumbprint, EnhancedKeyUsageList | Format-List
         shell: pwsh
 
       - name: Upload Windows build
         uses: actions/upload-artifact@v4
         with:
           name: windows-msix
-          path: |
-            build/windows/x64/runner/Release/*.msix
-            build/windows/x64/runner/Release/signed/*.msix
+          path: build/windows/x64/runner/Release/signed/*.msix
