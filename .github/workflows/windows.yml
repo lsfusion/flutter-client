@@ -119,6 +119,7 @@ jobs:
           # Переименовываем файл
           Move-Item -Path $msixFile.FullName -Destination $finalMsixPath -Force
           Write-Host "Signed file renamed to: $newName in folder $signedDir"
+          Copy-Item -Path $finalMsixPath -Destination "."
           
           (Get-Content windows/flutter-client.appinstaller.template) `
             -replace '\$\{VERSION\}', $finalVersion `
@@ -133,5 +134,5 @@ jobs:
         with:
           name: windows-msix
           path: |
-            build/windows/x64/runner/Release/signed/*.msix
+            flutter-client-*.msix
             flutter-client.appinstaller
