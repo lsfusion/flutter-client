@@ -122,7 +122,7 @@ jobs:
           Move-Item -Path $msixFile.FullName -Destination $finalMsixPath -Force
           Write-Host "Signed file renamed to: $newName in folder $signedDir"
           
-          (Get-Content App.appinstaller.template) `
+          (Get-Content windows/flutter-client.appinstaller.template) `
             -replace '\$\{VERSION\}', $finalVersion `
             -replace '\$\{MSIX_NAME\}', $newName `
             | Set-Content flutter-client.appinstaller
