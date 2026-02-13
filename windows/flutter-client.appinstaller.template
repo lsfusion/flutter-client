@@ -2,7 +2,7 @@
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
     Version="${VERSION}"
-    Uri="https://download.lsfusion.org/flutter/windows/flutter-client.appinstaller"
+    Uri="https://download.lsfusion.org/flutter/windows/flutter-client.appinstaller">
 
     <MainPackage
         Name="com.lsfusion.flutterclient"

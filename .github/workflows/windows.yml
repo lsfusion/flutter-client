@@ -124,7 +124,7 @@ jobs:
           (Get-Content windows/flutter-client.appinstaller.template) `
             -replace '\$\{VERSION\}', $finalVersion `
             -replace '\$\{MSIX_NAME\}', $newName `
-            | Set-Content flutter-client.appinstaller
+            | Out-File -FilePath flutter-client.appinstaller -Encoding utf8
           
           Write-Host "AppInstaller generated for version: $finalVersion"
         shell: pwsh
