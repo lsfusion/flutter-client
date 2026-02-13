@@ -130,15 +130,17 @@ jobs:
         shell: pwsh
 
       - name: Upload to CDN via SFTP
-        uses: appleboy/scp-action@v0.1.7
+        uses: Dylan700/sftp-upload-action@latest
         with:
-          host: ${{ secrets.SFTP_HOST }}
+          server: ${{ secrets.SFTP_HOST }}
           username: ${{ secrets.SFTP_USERNAME }}
           password: ${{ secrets.SFTP_PASSWORD }}
-          port: ${{ secrets.SFTP_PORT || 22 }}
-          source: "flutter-client-*.msix,flutter-client.appinstaller"
-          target: "flutter/windows/"
-          strip_components: 0
+          port: 22
+          uploads: |
+            ./ => ./flutter/windows/
+          ignore: |
+            !flutter-client-*.msix
+            !flutter-client.appinstaller
 
       - name: Upload Windows build
         uses: actions/upload-artifact@v4
