@@ -96,8 +96,44 @@ jobs:
           & "$ckaTool" unload
         shell: pwsh
 
+      - name: Rename Signed File and Generate AppInstaller
+        run: |
+          # 1. Извлекаем версию из pubspec.yaml
+          $pubspecContent = Get-Content pubspec.yaml -Raw
+          $rawVersion = ([regex]::Match($pubspecContent, '(?m)^version:\s*(.+)').Groups[1].Value).Trim()
+          
+          # Логика msix: "All prerelease and build info is discarded"
+          # Отсекаем всё, что после '+' или '-'
+          $baseVersion = $rawVersion.Split('+-')[0]
+          
+          # Добиваем до 4-х частей нулями (как требует Windows и делает msix)
+          $vParts = $baseVersion.Split('.') | Where-Object { $_ -ne "" }
+          while ($vParts.Count -lt 4) { $vParts += "0" }
+          $finalVersion = ($vParts[0..3]) -join '.'
+          
+          # 2. Переименовываем подписанный файл
+          $msixFile = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
+          $newName = "flutter-client-$finalVersion.msix"
+          $signedDir = "build/windows/x64/runner/Release/signed"
+          
+          if (!(Test-Path $signedDir)) { New-Item -ItemType Directory -Force -Path $signedDir }
+          $finalMsixPath = Join-Path $signedDir $newName
+          
+          Move-Item -Path $msixFile.FullName -Destination $finalMsixPath -Force
+          Write-Host "Signed file moved and renamed to: $newName"
+          
+          (Get-Content App.appinstaller.template) `
+            -replace '\$\{VERSION\}', $finalVersion `
+            -replace '\$\{MSIX_NAME\}', $newName `
+            | Set-Content flutter-client.appinstaller
+          
+          Write-Host "AppInstaller generated for version: $finalVersion"
+        shell: pwsh
+
       - name: Upload Windows build
         uses: actions/upload-artifact@v4
         with:
           name: windows-msix
-          path: build/windows/x64/runner/Release/signed/*.msix
+          path: |
+            build/windows/x64/runner/Release/signed/*.msix
+            flutter-client.appinstaller

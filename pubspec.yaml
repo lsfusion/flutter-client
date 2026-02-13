@@ -63,9 +63,10 @@ msix_config:
   publisher_display_name: lsFusion
   publisher: CN=Aliaksei Kirkouski, O=Aliaksei Kirkouski, L=Warsaw, S=Masovian Voivodeship, C=PL
   identity_name: com.lsfusion.flutterclient
-  msix_version: 1.0.0.0
+#  msix_version: 1.0.0.0
   capabilities: internetClient
   sign_msix: false
+  output_name: flutter-client
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
