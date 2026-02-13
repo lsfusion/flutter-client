@@ -130,15 +130,17 @@ jobs:
         shell: pwsh
 
       - name: Upload to CDN via SFTP
-        uses: Dylan700/sftp-upload-action@latest
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.SFTP_HOST }}
           username: ${{ secrets.SFTP_USERNAME }}
           password: ${{ secrets.SFTP_PASSWORD }}
           port: 22
-          uploads: |
-            ./ => ./flutter/windows/
-          ignore: |
+          protocol: sftp
+          server-dir: flutter/windows/
+          local-dir: ./
+          exclude: |
+            **
             !flutter-client-*.msix
             !flutter-client.appinstaller
 
