@@ -111,16 +111,16 @@ jobs:
           while ($vParts.Count -lt 4) { $vParts += "0" }
           $finalVersion = ($vParts[0..3]) -join '.'
           
-          # 2. Переименовываем подписанный файл
-          $msixFile = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
-          $newName = "flutter-client-$finalVersion.msix"
           $signedDir = "build/windows/x64/runner/Release/signed"
-          
-          if (!(Test-Path $signedDir)) { New-Item -ItemType Directory -Force -Path $signedDir }
+          $msixFile = Get-ChildItem -Path "$signedDir/*.msix" | Select-Object -First 1
+          if ($null -eq $msixFile) { 
+            throw "MSIX file not found in $signedDir!" 
+          }
+          $newName = "flutter-client-$finalVersion.msix"
           $finalMsixPath = Join-Path $signedDir $newName
-          
+          # Переименовываем файл
           Move-Item -Path $msixFile.FullName -Destination $finalMsixPath -Force
-          Write-Host "Signed file moved and renamed to: $newName"
+          Write-Host "Signed file renamed to: $newName in folder $signedDir"
           
           (Get-Content App.appinstaller.template) `
             -replace '\$\{VERSION\}', $finalVersion `
