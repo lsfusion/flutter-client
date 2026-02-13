@@ -98,18 +98,16 @@ jobs:
 
       - name: Rename Signed File and Generate AppInstaller
         run: |
-          # 1. Извлекаем версию из pubspec.yaml
+          # 1. Извлекаем версию (ожидаем только цифры и точки, например 1.0.0)
           $pubspecContent = Get-Content pubspec.yaml -Raw
-          $rawVersion = ([regex]::Match($pubspecContent, '(?m)^version:\s*(.+)').Groups[1].Value).Trim()
+          $finalVersion = ([regex]::Match($pubspecContent, '(?m)^version:\s*([\d\.]+)').Groups[1].Value).Trim()
           
-          # Логика msix: "All prerelease and build info is discarded"
-          # Отсекаем всё, что после '+' или '-'
-          $baseVersion = $rawVersion.Split('+-')[0]
-          
-          # Добиваем до 4-х частей нулями (как требует Windows и делает msix)
-          $vParts = $baseVersion.Split('.') | Where-Object { $_ -ne "" }
+          # Приводим к стандарту Windows (4 части), если в pubspec только 3 (например, 1.0.0 -> 1.0.0.0)
+          $vParts = $finalVersion.Split('.')
           while ($vParts.Count -lt 4) { $vParts += "0" }
           $finalVersion = ($vParts[0..3]) -join '.'
+          
+          Write-Host "Version used: $finalVersion"
           
           $signedDir = "build/windows/x64/runner/Release/signed"
           $msixFile = Get-ChildItem -Path "$signedDir/*.msix" | Select-Object -First 1
