@@ -82,9 +82,9 @@ jobs:
           if ($null -eq $CodeSigningCert) { throw "Certificate not found." }
           
           $msixPath = Get-ChildItem -Path build/windows/x64/runner/Release/*.msix | Select-Object -First 1
-          $signedDir = "build/windows/x64/runner/Release/signed"
-          if (!(Test-Path $signedDir)) { New-Item -ItemType Directory -Force -Path $signedDir }
-          $signedMsixPath = Join-Path $signedDir $msixPath.Name
+          $outputDir = "deploy_out"
+          if (!(Test-Path $outputDir)) { New-Item -ItemType Directory -Force -Path $outputDir }
+          $signedMsixPath = Join-Path $outputDir $msixPath.Name
           
           # Sign
           # & "$env:SIGNTOOL_PATH" sign /fd sha256 /tr http://ts.ssl.com /td sha256 /sha1 "$($CodeSigningCert.Thumbprint)" "$($msixPath.FullName)"
@@ -109,22 +109,22 @@ jobs:
           
           Write-Host "Version used: $finalVersion"
           
-          $signedDir = "build/windows/x64/runner/Release/signed"
-          $msixFile = Get-ChildItem -Path "$signedDir/*.msix" | Select-Object -First 1
+          $outputDir = "deploy_out"
+          $msixFile = Get-ChildItem -Path "$outputDir/*.msix" | Select-Object -First 1
           if ($null -eq $msixFile) { 
-            throw "MSIX file not found in $signedDir!" 
+            throw "MSIX file not found in $outputDir!" 
           }
           $newName = "flutter-client-$finalVersion.msix"
-          $finalMsixPath = Join-Path $signedDir $newName
+          $finalMsixPath = Join-Path $outputDir $newName
           # Переименовываем файл
           Move-Item -Path $msixFile.FullName -Destination $finalMsixPath -Force
-          Write-Host "Signed file renamed to: $newName in folder $signedDir"
+          Write-Host "Signed file renamed to: $newName in folder $outputDir"
           Copy-Item -Path $finalMsixPath -Destination "."
           
           (Get-Content windows/flutter-client.appinstaller.template) `
             -replace '\$\{VERSION\}', $finalVersion `
             -replace '\$\{MSIX_NAME\}', $newName `
-            | Out-File -FilePath flutter-client.appinstaller -Encoding utf8
+            | Out-File -FilePath "$outputDir/flutter-client.appinstaller" -Encoding utf8
           
           Write-Host "AppInstaller generated for version: $finalVersion"
         shell: pwsh
@@ -138,11 +138,7 @@ jobs:
           port: 21
           protocol: ftp
           server-dir: flutter/windows/
-          local-dir: ./
-          exclude: |
-            **
-            !flutter-client-*.msix
-            !flutter-client.appinstaller
+          local-dir: ./deploy_out/
 
       - name: Upload Windows build
         uses: actions/upload-artifact@v4
