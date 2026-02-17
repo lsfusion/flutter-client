@@ -32,13 +32,61 @@ jobs:
       - name: Build macOS build
         run: flutter build macos --release
         
-      - name: Zip macOS build
+      - name: Install create-dmg
+        run: brew install create-dmg  
+        
+      - name: Create beautiful DMG
         run: |
-          cd build/macos/Build/Products/Release
-          zip -r flutter_client-macos.zip flutter_client.app
+          APP_PATH="build/macos/Build/Products/Release/flutter_client.app"
+          DMG_PATH="build/macos/Build/Products/Release/flutter_client-macos.dmg"
 
-      - name: Upload macOS build
+          create-dmg \
+            --volname "flutter_client" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "flutter_client.app" 200 190 \
+            --app-drop-link 600 185 \
+            --no-internet-enable \
+            "$DMG_PATH" \
+            "$APP_PATH"
+
+      - name: Upload DMG
         uses: actions/upload-artifact@v4
         with:
-          name: macos-build
-          path: build/macos/Build/Products/Release/flutter_client-macos.zip
+          name: flutter_client-macos
+          path: build/macos/Build/Products/Release/flutter_client-macos.dmg  
+        
+        
+#      - name: Create DMG
+#        run: |
+#          cd build/macos/Build/Products/Release
+#
+#          mkdir dmg
+#          cp -r flutter_client.app dmg/
+#
+#          hdiutil create \
+#            -volname "flutter_client" \
+#            -srcfolder dmg \
+#            -ov \
+#            -format UDZO \
+#            flutter_client-macos.dmg
+#
+#      - name: Upload DMG
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: flutter_client-macos
+#          path: build/macos/Build/Products/Release/flutter_client-macos.dmg
+          
+          
+        
+#      - name: Zip macOS build
+#        run: |
+#          cd build/macos/Build/Products/Release
+#          zip -r flutter_client-macos.zip flutter_client.app
+#
+#      - name: Upload macOS build
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: macos-build
+#          path: build/macos/Build/Products/Release/flutter_client-macos.zip
