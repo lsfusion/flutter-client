@@ -60,7 +60,7 @@ jobs:
           port: 21
           protocol: ftp
           server-dir: flutter/macos/
-          local-dir: ./Users/runner/work/flutter-client/flutter-client/build/macos/Build/Products/Release/
+          local-dir: ./build/macos/Build/Products/Release/
           exclude: |
             **
             !flutter_client-macos.dmg
