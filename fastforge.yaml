@@ -1,0 +1,13 @@
+output_path: dist/
+publishers: []
+build_configs:
+  - name: release
+    arguments:
+      - --release
+makers:
+  - name: appimage
+    build_config: release
+  - name: deb
+    build_config: release
+  - name: rpm
+    build_config: release

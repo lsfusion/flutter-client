@@ -30,16 +30,57 @@ jobs:
             ninja-build \
             pkg-config \
             libgtk-3-dev \
-            liblzma-dev
-          
-      - name: Install dependencies
-        run: flutter pub get
-        
-      - name: Build Linux build
-        run: flutter build linux --release
+            liblzma-dev \
+            libappindicator3-dev \
+            rpm \
+            file
 
-      - name: Upload Linux build
+      - name: Install dependencies
+        run: |
+          flutter pub get
+          dart pub global activate fastforge
+
+      - name: Build Linux packages
+        run: |
+          export PATH="$PATH:$HOME/.pub-cache/bin"
+          fastforge release --make appimage,deb,rpm
+
+      - name: Prepare and rename artifacts
+        run: |
+          VERSION=$(grep 'version:' pubspec.yaml | sed 's/version: //')
+          mkdir deploy_out
+          
+          # AppImage
+          APPIMAGE_FILE=$(find dist/ -name "*.AppImage" | head -n 1)
+          if [ -f "$APPIMAGE_FILE" ]; then
+            cp "$APPIMAGE_FILE" "deploy_out/flutter-client-$VERSION.AppImage"
+          fi
+          
+          # DEB
+          DEB_FILE=$(find dist/ -name "*.deb" | head -n 1)
+          if [ -f "$DEB_FILE" ]; then
+            cp "$DEB_FILE" "deploy_out/flutter-client-$VERSION.deb"
+          fi
+          
+          # RPM
+          RPM_FILE=$(find dist/ -name "*.rpm" | head -n 1)
+          if [ -f "$RPM_FILE" ]; then
+            cp "$RPM_FILE" "deploy_out/flutter-client-$VERSION.rpm"
+          fi
+
+      - name: Upload to CDN via SFTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USERNAME }}
+          password: ${{ secrets.SFTP_PASSWORD }}
+          port: 21
+          protocol: ftp
+          server-dir: flutter/linux/
+          local-dir: ./deploy_out/
+
+      - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: linux-build
-          path: build/linux/x64/release/bundle/**
+          name: linux-packages
+          path: deploy_out/*
