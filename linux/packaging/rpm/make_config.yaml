@@ -1,6 +1,5 @@
+display_name: lsFusion Flutter client
 summary: lsFusion Flutter client
-description: lsFusion Flutter client
-license: MIT
 vendor: lsFusion
 group: Applications/Productivity
 requires:

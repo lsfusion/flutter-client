@@ -1,8 +1,12 @@
+display_name: lsFusion Flutter client
+package_name: flutter-client
+maintainer:
+  name: lsFusion
+  email: support@lsfusion.org
+installed_size: 25000
 priority: optional
 section: utils
-maintainer: lsFusion
-description: lsFusion Flutter client
-depends:
+dependencies:
   - libgtk-3-0
   - libappindicator3-1
   - liblzma5
