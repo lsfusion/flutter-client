@@ -43,7 +43,7 @@ jobs:
       - name: Build Linux packages
         run: |
           export PATH="$PATH:$HOME/.pub-cache/bin"
-          fastforge release --make appimage,deb,rpm
+          fastforge package --platform linux --targets appimage,deb,rpm
 
       - name: Prepare and rename artifacts
         run: |
