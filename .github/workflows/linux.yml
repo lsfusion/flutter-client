@@ -40,6 +40,17 @@ jobs:
           flutter pub get
           dart pub global activate fastforge
 
+      - name: Patch flutter_app_packager (AppImage race condition fix)
+        run: |
+          FILE=$(find $HOME/.pub-cache -name app_package_maker_appimage.dart | grep flutter_app_packager)
+          if [ -n "$FILE" ]; then
+            echo "Patching $FILE"
+            # Add common system libraries to defaultSharedObjects to avoid parallel cp conflicts and bundling issues
+            sed -i "s/'libgtk-3.so.0',/'libgtk-3.so.0', 'libstdc++.so.6', 'libgcc_s.so.1',/" "$FILE"
+          else
+            echo "flutter_app_packager not found in pub-cache"
+          fi
+
       - name: Build Linux packages
         run: |
           export PATH="$PATH:$HOME/.pub-cache/bin"
