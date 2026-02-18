@@ -1,0 +1,8 @@
+priority: optional
+section: utils
+maintainer: lsFusion
+description: lsFusion Flutter client
+depends:
+  - libgtk-3-0
+  - libappindicator3-1
+  - liblzma5

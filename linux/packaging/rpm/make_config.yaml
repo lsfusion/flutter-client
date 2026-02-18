@@ -1,0 +1,9 @@
+summary: lsFusion Flutter client
+description: lsFusion Flutter client
+license: MIT
+vendor: lsFusion
+group: Applications/Productivity
+requires:
+  - gtk3
+  - libappindicator-gtk3
+  - xz-libs
