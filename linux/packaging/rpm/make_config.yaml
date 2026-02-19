@@ -2,6 +2,9 @@ display_name: lsFusion Flutter client
 summary: lsFusion Flutter client
 vendor: lsFusion
 group: Applications/Productivity
+categories:
+  - Office
+  - Utility
 requires:
   - gtk3
   - libappindicator-gtk3

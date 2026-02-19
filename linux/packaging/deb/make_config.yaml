@@ -6,6 +6,9 @@ maintainer:
 installed_size: 25000
 priority: optional
 section: utils
+categories:
+  - Office
+  - Utility
 dependencies:
   - libgtk-3-0
   - libappindicator3-1

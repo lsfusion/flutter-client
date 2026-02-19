@@ -1,5 +1,8 @@
 display_name: lsFusion Flutter client
 icon: web/icons/Icon-192.png
+categories:
+  - Office
+  - Utility
 
 include: []
 exclude: []
