@@ -42,13 +42,33 @@ jobs:
 
       - name: Patch flutter_app_packager (AppImage race condition fix)
         run: |
-          FILE=$(find $HOME/.pub-cache -name app_package_maker_appimage.dart | grep flutter_app_packager)
+          # Try to find the file in common locations
+          SEARCH_PATHS="$HOME/.pub-cache /home/runner/.pub-cache /opt/hostedtoolcache/flutter"
+          FILE=""
+          for path in $SEARCH_PATHS; do
+            if [ -d "$path" ]; then
+              FOUND=$(find "$path" -name app_package_maker_appimage.dart | grep flutter_app_packager | head -n 1)
+              if [ -n "$FOUND" ]; then
+                FILE="$FOUND"
+                break
+              fi
+            fi
+          done
+
+          # If still not found, try a global find (slower but sure)
+          if [ -z "$FILE" ]; then
+            FILE=$(find / -name app_package_maker_appimage.dart 2>/dev/null | grep flutter_app_packager | head -n 1)
+          fi
+
           if [ -n "$FILE" ]; then
             echo "Patching $FILE"
             # Add common system libraries to defaultSharedObjects to avoid parallel cp conflicts and bundling issues
             sed -i "s/'libgtk-3.so.0',/'libgtk-3.so.0', 'libstdc++.so.6', 'libgcc_s.so.1',/" "$FILE"
           else
-            echo "flutter_app_packager not found in pub-cache"
+            echo "flutter_app_packager not found"
+            # List some directories to help debug if it fails again
+            ls -R $HOME/.pub-cache 2>/dev/null | head -n 20 || echo "No $HOME/.pub-cache"
+            exit 1
           fi
 
       - name: Build Linux packages
