@@ -80,7 +80,7 @@ jobs:
 
       - name: Prepare and rename artifacts
         run: |
-          VERSION=$(grep 'version:' pubspec.yaml | sed 's/version: //')
+          VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2)
           mkdir deploy_out
           
           # AppImage
