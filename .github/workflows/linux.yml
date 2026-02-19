@@ -64,8 +64,10 @@ jobs:
 
           if [ -n "$FILE" ]; then
             echo "Patching $FILE"
-            # Add common system libraries to avoid parallel cp conflicts and bundling issues
-            sed -i "s/'libgtk-3.so.0',/'libgtk-3.so.0', 'libstdc++.so.6', 'libgcc_s.so.1',/" "$FILE"
+            # More aggressive patch: explicitly filter out problematic libraries from the copy loop
+            # to avoid "File exists" race conditions when multiple SOs depend on them.
+            # We add them to the removeWhere block that already exists in the code.
+            sed -i "s/lib.contains('libflutter_linux_gtk.so')/lib.contains('libflutter_linux_gtk.so') || lib.contains('libstdc++.so.6') || lib.contains('libgcc_s.so.1')/" "$FILE"
           else
             echo "flutter_app_packager not found"
             exit 1
