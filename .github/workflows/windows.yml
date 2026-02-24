@@ -129,16 +129,16 @@ jobs:
           Write-Host "AppInstaller generated for version: $finalVersion"
         shell: pwsh
 
-      - name: Upload to CDN via SFTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+      - name: Upload to CDN via FTP
+        uses: sand4rt/ftp-deployer@v1.8
         with:
-          server: ${{ secrets.SFTP_HOST }}
+          host: ${{ secrets.SFTP_HOST }}
           username: ${{ secrets.SFTP_USERNAME }}
           password: ${{ secrets.SFTP_PASSWORD }}
           port: 21
-          protocol: ftp
-          server-dir: flutter/windows/
-          local-dir: ./deploy_out/
+          local_folder: deploy_out/
+          remote_folder: flutter/windows/
+          cleanup: false
 
       - name: Upload Windows build
         uses: actions/upload-artifact@v4

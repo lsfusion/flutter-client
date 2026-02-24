@@ -50,20 +50,22 @@ jobs:
             --no-internet-enable \
             "$DMG_PATH" \
             "$APP_PATH"
-          
-      - name: Upload to CDN via SFTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+
+      - name: Prepare and rename artifacts
+        run: |
+          mkdir deploy_out
+          cp build/macos/Build/Products/Release/flutter_client-macos.dmg deploy_out/
+
+      - name: Upload to CDN via FTP
+        uses: sand4rt/ftp-deployer@v1.8
         with:
-          server: ${{ secrets.SFTP_HOST }}
+          host: ${{ secrets.SFTP_HOST }}
           username: ${{ secrets.SFTP_USERNAME }}
           password: ${{ secrets.SFTP_PASSWORD }}
           port: 21
-          protocol: ftp
-          server-dir: flutter/macos/
-          local-dir: ./build/macos/Build/Products/Release/
-          exclude: |
-            **
-            !flutter_client-macos.dmg
+          local_folder: deploy_out/
+          remote_folder: flutter/macos/
+          cleanup: false
 
       - name: Upload DMG
         uses: actions/upload-artifact@v4

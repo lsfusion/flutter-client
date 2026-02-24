@@ -27,22 +27,25 @@ jobs:
       - name: Build Android APK
         run: flutter build apk --release
 
-      - name: Upload to CDN via SFTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+      - name: Prepare and rename artifacts
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2)
+          mkdir deploy_out
+          cp build/app/outputs/flutter-apk/app-release.apk "deploy_out/flutter-client-$VERSION.apk"
+
+      - name: Upload to CDN via FTP
+        uses: sand4rt/ftp-deployer@v1.8
         with:
-          server: ${{ secrets.SFTP_HOST }}
+          host: ${{ secrets.SFTP_HOST }}
           username: ${{ secrets.SFTP_USERNAME }}
           password: ${{ secrets.SFTP_PASSWORD }}
           port: 21
-          protocol: ftp
-          server-dir: flutter/android/
-          local-dir: ./build/app/outputs/flutter-apk/
-          exclude: |
-            **
-            !app-release.apk
+          local_folder: deploy_out/
+          remote_folder: flutter/android/
+          cleanup: false
   
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: deploy_out/*
