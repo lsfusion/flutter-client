@@ -33,61 +33,22 @@ jobs:
             liblzma-dev \
             libappindicator3-dev \
             rpm \
-            file \
-            libfuse2
-
-      - name: Install appimagetool
-        run: |
-          sudo wget -O /usr/local/bin/appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
-          sudo chmod +x /usr/local/bin/appimagetool
+            file
 
       - name: Install dependencies
         run: |
           flutter pub get
           dart pub global activate fastforge
 
-      - name: Patch flutter_app_packager (AppImage race condition fix)
-        run: |
-          # The file location based on the previous run and PUB_CACHE env
-          FILE=$(find "$PUB_CACHE" -name app_package_maker_appimage.dart | grep flutter_app_packager | head -n 1)
-          
-          if [ -z "$FILE" ]; then
-            # Fallback for local testing or different setups
-            SEARCH_PATHS="$HOME/.pub-cache /home/runner/.pub-cache /opt/hostedtoolcache/flutter"
-            for path in $SEARCH_PATHS; do
-              if [ -d "$path" ]; then
-                FILE=$(find "$path" -name app_package_maker_appimage.dart | grep flutter_app_packager | head -n 1)
-                [ -n "$FILE" ] && break
-              fi
-            done
-          fi
-
-          if [ -n "$FILE" ]; then
-            echo "Patching $FILE"
-            # More aggressive patch: explicitly filter out problematic libraries from the copy loop
-            # to avoid "File exists" race conditions when multiple SOs depend on them.
-            # We add them to the removeWhere block that already exists in the code.
-            sed -i "s/lib.contains('libflutter_linux_gtk.so')/lib.contains('libflutter_linux_gtk.so') || lib.contains('libstdc++.so.6') || lib.contains('libgcc_s.so.1')/" "$FILE"
-          else
-            echo "flutter_app_packager not found"
-            exit 1
-          fi
-
       - name: Build Linux packages
         run: |
           export PATH="$PATH:$HOME/.pub-cache/bin"
-          fastforge package --platform linux --targets appimage,deb,rpm
+          fastforge package --platform linux --targets deb,rpm
 
       - name: Prepare and rename artifacts
         run: |
           VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2)
           mkdir deploy_out
-          
-          # AppImage
-          APPIMAGE_FILE=$(find dist/ -name "*.AppImage" | head -n 1)
-          if [ -f "$APPIMAGE_FILE" ]; then
-            cp "$APPIMAGE_FILE" "deploy_out/flutter-client-$VERSION.AppImage"
-          fi
           
           # DEB
           DEB_FILE=$(find dist/ -name "*.deb" | head -n 1)

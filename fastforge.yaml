@@ -5,8 +5,6 @@ build_configs:
     arguments:
       - --release
 makers:
-  - name: appimage
-    build_config: release
   - name: deb
     build_config: release
   - name: rpm
