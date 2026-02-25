@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_windows/webview_windows.dart' as wv;
+import 'package:flutter_linux_webview/flutter_linux_webview.dart' as lv;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'address_bar.dart';
@@ -33,7 +34,7 @@ class WebViewPage extends StatefulWidget {
 }
 
 class _WebViewPageState extends State<WebViewPage> {
-  WebViewController? _flutterWebViewController;
+  WebViewController? _controller;
   wv.WebviewController? _windowsWebViewController;
   bool _windowsControllerReady = false;
 
@@ -41,15 +42,17 @@ class _WebViewPageState extends State<WebViewPage> {
   bool _isLoading = false;
   bool _isReady = false;
 
-  // String _currentUrl = 'http://192.168.1.44:8080/lsf';
-  // String _currentUrl = 'https://demo.lsfusion.org/mycompany/';
   String _currentUrl = 'http://192.168.1.44:8888/main';
 
   bool get isWindows => Platform.isWindows;
+  bool get isLinux => Platform.isLinux;
 
   @override
   void initState() {
     super.initState();
+    if (isLinux) {
+      WebView.platform = lv.LinuxWebView();
+    }
     _loadLastUrl();
     if (isWindows) {
       _initWindowsWebView();
@@ -63,35 +66,9 @@ class _WebViewPageState extends State<WebViewPage> {
       _currentUrl = history.last;
     }
 
-    if (!isWindows) {
-      _initFlutterWebView();
-    }
-
     setState(() {
       _isReady = true;
     });
-  }
-
-  void _initFlutterWebView() {
-    _flutterWebViewController = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..addJavaScriptChannel(
-        'Flutter',
-        onMessageReceived: (JavaScriptMessage message) async {
-          _flutterWebViewController!.runJavaScript(
-            await execute(message.message),
-          );
-        },
-      )
-      ..setNavigationDelegate(NavigationDelegate(
-        onPageStarted: (_) {
-          setState(() => _isLoading = true);
-        },
-        onPageFinished: (_) {
-          setState(() => _isLoading = false);
-        },
-      ))
-      ..loadRequest(Uri.parse(_currentUrl));
   }
 
   void _initWindowsWebView() async {
@@ -200,7 +177,7 @@ class _WebViewPageState extends State<WebViewPage> {
                       if (isWindows) {
                         _windowsWebViewController?.loadUrl(url);
                       } else {
-                        _flutterWebViewController?.loadRequest(Uri.parse(url));
+                        _controller?.loadUrl(url);
                       }
                     },
                   ),
@@ -212,9 +189,33 @@ class _WebViewPageState extends State<WebViewPage> {
                   ? (_windowsControllerReady && _windowsWebViewController != null
                       ? wv.Webview(_windowsWebViewController!)
                       : const Center(child: CircularProgressIndicator()))
-                  : (_flutterWebViewController != null
-                      ? WebViewWidget(controller: _flutterWebViewController!)
-                      : const Center(child: CircularProgressIndicator())),
+                  : WebView(
+                      initialUrl: _currentUrl,
+                      javascriptMode: JavascriptMode.unrestricted,
+                      onWebViewCreated: (WebViewController webViewController) {
+                        _controller = webViewController;
+                      },
+                      javascriptChannels: <JavascriptChannel>{
+                        JavascriptChannel(
+                          name: 'Flutter',
+                          onMessageReceived: (JavascriptMessage message) async {
+                            final jsResponse = await execute(message.message);
+                            _controller?.runJavascript(jsResponse);
+                          },
+                        ),
+                      },
+                      onPageStarted: (url) {
+                        setState(() {
+                          _isLoading = true;
+                          _currentUrl = url;
+                        });
+                      },
+                      onPageFinished: (url) {
+                        setState(() {
+                          _isLoading = false;
+                        });
+                      },
+                    ),
             ),
           ],
         ),
