@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_windows/webview_windows.dart' as wv;
@@ -7,7 +8,7 @@ import 'package:flutter_linux_webview/flutter_linux_webview.dart' as lv;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'address_bar.dart';
-import 'native.dart';
+import 'native.dart' as native;
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,10 +34,11 @@ class WebViewPage extends StatefulWidget {
   _WebViewPageState createState() => _WebViewPageState();
 }
 
-class _WebViewPageState extends State<WebViewPage> {
+class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
   WebViewController? _controller;
   wv.WebviewController? _windowsWebViewController;
   bool _windowsControllerReady = false;
+  bool _linuxInitialized = false;
 
   bool _showAddressBar = false;
   bool _isLoading = false;
@@ -50,12 +52,44 @@ class _WebViewPageState extends State<WebViewPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (isLinux) {
       WebView.platform = lv.LinuxWebView();
+      _initLinuxWebView();
     }
     _loadLastUrl();
     if (isWindows) {
       _initWindowsWebView();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    if (isLinux) {
+      lv.LinuxWebViewPlugin.terminate();
+    }
+    super.dispose();
+  }
+
+  @override
+  Future<AppExitResponse> didRequestAppExit() async {
+    if (isLinux) {
+      await lv.LinuxWebViewPlugin.terminate();
+    }
+    return AppExitResponse.exit;
+  }
+
+  Future<void> _initLinuxWebView() async {
+    try {
+      await lv.LinuxWebViewPlugin.initialize();
+      if (mounted) {
+        setState(() {
+          _linuxInitialized = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to initialize Linux WebView: $e');
     }
   }
 
@@ -101,37 +135,37 @@ class _WebViewPageState extends State<WebViewPage> {
   Future<Map<String, dynamic>> executeCommand(String cmd, List<dynamic> arguments) async {
     switch (cmd) {
       case 'sendTCP':
-        return await sendTCP(arguments[0], arguments[1], arguments[2], arguments[3]);
+        return await native.sendTCP(arguments[0], arguments[1], arguments[2], arguments[3]);
       case 'sendUDP':
-        return await sendUDP(arguments[0], arguments[1], arguments[2]);
+        return await native.sendUDP(arguments[0], arguments[1], arguments[2]);
       case 'readFile':
-        return await readFile(arguments[0]);
+        return await native.readFile(arguments[0]);
       case 'deleteFile':
-        return await deleteFile(arguments[0]);
+        return await native.deleteFile(arguments[0]);
       case 'fileExists':
-        return await fileExists(arguments[0]);
+        return await native.fileExists(arguments[0]);
       case 'makeDir':
-        return await makeDir(arguments[0]);
+        return await native.makeDir(arguments[0]);
       case 'moveFile':
-        return await moveFile(arguments[0], arguments[1]);
+        return await native.moveFile(arguments[0], arguments[1]);
       case 'copyFile':
-        return await copyFile(arguments[0], arguments[1]);
+        return await native.copyFile(arguments[0], arguments[1]);
       case 'listFiles':
-        return await listFiles(arguments[0], arguments[1]);
+        return await native.listFiles(arguments[0], arguments[1]);
       case 'writeFile':
-        return await writeFile(arguments[0], arguments[1]);
+        return await native.writeFile(arguments[0], arguments[1]);
       case 'getAvailablePrinters':
-        return await getAvailablePrinters();
+        return await native.getAvailablePrinters();
       case 'print':
-        return await print(arguments[0], arguments[1], arguments[2], arguments[3]);
+        return await native.print(arguments[0], arguments[1], arguments[2], arguments[3]);
       case 'runCommand':
-        return await runCommand(arguments[0]);
+        return await native.runCommand(arguments[0]);
       case 'writeToSocket':
-        return await writeToSocket(arguments[0], arguments[1], arguments[2], arguments[3]);
+        return await native.writeToSocket(arguments[0], arguments[1], arguments[2], arguments[3]);
       case 'writeToComPort':
-        return await writeToComPort(arguments[0], arguments[1], arguments[2]);
+        return await native.writeToComPort(arguments[0], arguments[1], arguments[2]);
       case 'ping':
-        return await ping(arguments[0]);
+        return await native.ping(arguments[0]);
       default:
         throw UnsupportedError('Unknown command: $cmd');
     }
@@ -189,33 +223,35 @@ class _WebViewPageState extends State<WebViewPage> {
                   ? (_windowsControllerReady && _windowsWebViewController != null
                       ? wv.Webview(_windowsWebViewController!)
                       : const Center(child: CircularProgressIndicator()))
-                  : WebView(
-                      initialUrl: _currentUrl,
-                      javascriptMode: JavascriptMode.unrestricted,
-                      onWebViewCreated: (WebViewController webViewController) {
-                        _controller = webViewController;
-                      },
-                      javascriptChannels: <JavascriptChannel>{
-                        JavascriptChannel(
-                          name: 'Flutter',
-                          onMessageReceived: (JavascriptMessage message) async {
-                            final jsResponse = await execute(message.message);
-                            _controller?.runJavascript(jsResponse);
+                  : (isLinux && !_linuxInitialized
+                      ? const Center(child: CircularProgressIndicator())
+                      : WebView(
+                          initialUrl: _currentUrl,
+                          javascriptMode: JavascriptMode.unrestricted,
+                          onWebViewCreated: (WebViewController webViewController) {
+                            _controller = webViewController;
                           },
-                        ),
-                      },
-                      onPageStarted: (url) {
-                        setState(() {
-                          _isLoading = true;
-                          _currentUrl = url;
-                        });
-                      },
-                      onPageFinished: (url) {
-                        setState(() {
-                          _isLoading = false;
-                        });
-                      },
-                    ),
+                          javascriptChannels: <JavascriptChannel>{
+                            JavascriptChannel(
+                              name: 'Flutter',
+                              onMessageReceived: (JavascriptMessage message) async {
+                                final jsResponse = await execute(message.message);
+                                _controller?.runJavascript(jsResponse);
+                              },
+                            ),
+                          },
+                          onPageStarted: (url) {
+                            setState(() {
+                              _isLoading = true;
+                              _currentUrl = url;
+                            });
+                          },
+                          onPageFinished: (url) {
+                            setState(() {
+                              _isLoading = false;
+                            });
+                          },
+                        )),
             ),
           ],
         ),
