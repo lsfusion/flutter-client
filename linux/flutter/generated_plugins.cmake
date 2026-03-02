@@ -4,7 +4,6 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   flutter_libserialport
-  flutter_linux_webview
   printing
 )
 
