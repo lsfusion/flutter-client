@@ -23,4 +23,9 @@ add_definitions(-DAPPLICATION_ID="${APPLICATION_ID}")
 target_link_libraries(${BINARY_NAME} PRIVATE flutter)
 target_link_libraries(${BINARY_NAME} PRIVATE PkgConfig::GTK)
 
+pkg_check_modules(WEBKIT2GTK REQUIRED webkit2gtk-4.0)
+target_link_libraries(${BINARY_NAME} PRIVATE ${WEBKIT2GTK_LIBRARIES})
+target_include_directories(${BINARY_NAME} PRIVATE ${WEBKIT2GTK_INCLUDE_DIRS})
+add_definitions(${WEBKIT2GTK_CFLAGS_OTHER})
+
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
