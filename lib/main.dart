@@ -82,9 +82,7 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
 
   Future<void> _initLinuxWebView() async {
     try {
-      await lv.LinuxWebViewPlugin.initialize(options: {
-        'no-sandbox': null,
-      });
+      await lv.LinuxWebViewPlugin.initialize();
       if (mounted) {
         setState(() {
           _linuxInitialized = true;
