@@ -5,6 +5,7 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   flutter_libserialport
   printing
+  webview_cef
   webview_windows
 )
 
