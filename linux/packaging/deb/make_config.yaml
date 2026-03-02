@@ -14,3 +14,4 @@ dependencies:
   - libgtk-3-0
   - libappindicator3-1
   - liblzma5
+  - libwebkit2gtk-4.1-0
