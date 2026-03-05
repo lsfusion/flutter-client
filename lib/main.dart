@@ -121,14 +121,6 @@ class _WebViewPageState extends State<WebViewPage> {
     await cef.WebviewManager().initialize();
     final controller = cef.WebviewManager().createWebView();
     _cefWebViewController = controller;
-    controller.setJavaScriptChannels({
-      cef.JavascriptChannel(
-        name: 'Flutter',
-        onMessageReceived: (cef.JavascriptMessage message) async {
-          controller.executeJavaScript(await execute(message.message));
-        },
-      )
-    });
 
     controller.setWebviewListener(cef.WebviewEventsListener(
       onLoadStart: (c, url) {
@@ -139,7 +131,17 @@ class _WebViewPageState extends State<WebViewPage> {
       },
     ));
 
-    await controller.loadUrl(_currentUrl);
+    await controller.initialize(_currentUrl);
+
+    controller.setJavaScriptChannels({
+      cef.JavascriptChannel(
+        name: 'Flutter',
+        onMessageReceived: (cef.JavascriptMessage message) async {
+          controller.executeJavaScript(await execute(message.message));
+        },
+      )
+    });
+
     setState(() {
       _cefControllerReady = true;
     });
