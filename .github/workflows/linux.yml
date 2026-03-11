@@ -58,7 +58,7 @@ jobs:
               dnf config-manager --set-enabled powertools && \
               
               # Install dependencies
-              dnf install -y clang cmake ninja-build pkg-config gtk3-devel xz-devel libappindicator-gtk3-devel rpm-build git unzip libstdc++-devel mesa-libGLU-devel libX11-devel tar xz && \
+              dnf install -y clang cmake ninja-build pkg-config gtk3-devel xz-devel libappindicator-gtk3-devel rpm-build git unzip libstdc++-devel mesa-libGLU-devel libX11-devel tar xz which && \
               
               # Install Flutter
               curl -o /tmp/flutter.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.29.1-stable.tar.xz && \
