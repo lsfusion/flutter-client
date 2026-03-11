@@ -52,6 +52,11 @@ jobs:
             -e HOME=/root \
             almalinux:8 \
             /bin/bash -c " \
+              # Enable EPEL and PowerTools (required for ninja-build and libappindicator)
+              dnf install -y epel-release && \
+              dnf install -y 'dnf-command(config-manager)' && \
+              dnf config-manager --set-enabled powertools && \
+              
               # Install dependencies
               dnf install -y clang cmake ninja-build pkg-config gtk3-devel xz-devel libappindicator-gtk3-devel rpm-build git unzip libstdc++-devel mesa-libGLU-devel libX11-devel tar xz && \
               
