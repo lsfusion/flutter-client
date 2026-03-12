@@ -21,28 +21,28 @@ jobs:
           channel: stable
           version: latest
 
-#      - name: Install Linux dependencies (Debian)
-#        run: |
-#          sudo apt-get update
-#          sudo apt-get install -y \
-#            clang \
-#            cmake \
-#            ninja-build \
-#            pkg-config \
-#            libgtk-3-dev \
-#            liblzma-dev \
-#            libappindicator3-dev \
-#            file
+      - name: Install Linux dependencies (Debian)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang \
+            cmake \
+            ninja-build \
+            pkg-config \
+            libgtk-3-dev \
+            liblzma-dev \
+            libappindicator3-dev \
+            file
 
       - name: Install dependencies
         run: |
           flutter pub get
           dart pub global activate fastforge
 
-#      - name: Build DEB package
-#        run: |
-#          export PATH="$PATH:$HOME/.pub-cache/bin"
-#          fastforge package --platform linux --targets deb
+      - name: Build DEB package
+        run: |
+          export PATH="$PATH:$HOME/.pub-cache/bin"
+          fastforge package --platform linux --targets deb
 
       - name: Build RPM package in AlmaLinux 8
         run: |
@@ -80,11 +80,11 @@ jobs:
           VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2)
           mkdir deploy_out
           
-#          # DEB
-#          DEB_FILE=$(find dist/ -name "*.deb" | head -n 1)
-#          if [ -f "$DEB_FILE" ]; then
-#            cp "$DEB_FILE" "deploy_out/flutter-client-$VERSION.deb"
-#          fi
+          # DEB
+          DEB_FILE=$(find dist/ -name "*.deb" | head -n 1)
+          if [ -f "$DEB_FILE" ]; then
+            cp "$DEB_FILE" "deploy_out/flutter-client-$VERSION.deb"
+          fi
           
           # RPM
           RPM_FILE=$(find dist/ -name "*.rpm" | head -n 1)
