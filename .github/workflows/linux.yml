@@ -52,6 +52,9 @@ jobs:
             -e HOME=/root \
             almalinux:8 \
             /bin/bash -c " \
+              # Configure RPM build to ignore internal shared libraries
+              echo '%__requires_exclude ^lib(flutter_.*|printing_plugin|webview_cef_plugin|cef)\\.so.*' > /root/.rpmmacros && \
+              
               # Enable EPEL and PowerTools (required for ninja-build and libappindicator)
               dnf install -y epel-release && \
               dnf install -y 'dnf-command(config-manager)' && \
