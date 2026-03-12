@@ -51,20 +51,30 @@ jobs:
             -w /app \
             -e HOME=/root \
             almalinux:8 \
-            /bin/bash -c "
+            /bin/bash -c " \
+              # Enable EPEL and PowerTools (required for ninja-build and libappindicator)
               dnf install -y epel-release && \
               dnf install -y 'dnf-command(config-manager)' && \
               dnf config-manager --set-enabled powertools && \
+              
+              # Install dependencies
               dnf install -y clang cmake ninja-build pkg-config gtk3-devel xz-devel libappindicator-gtk3-devel rpm-build git unzip libstdc++-devel mesa-libGLU-devel libX11-devel tar xz which && \
+              
+              # Install Flutter
               curl -o /tmp/flutter.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.29.1-stable.tar.xz && \
               mkdir -p /opt && tar -xf /tmp/flutter.tar.xz -C /opt && rm /tmp/flutter.tar.xz && \
               export PATH=\$PATH:/opt/flutter/bin && \
               git config --global --add safe.directory /opt/flutter && \
+              
+              # Install fastforge
               flutter pub global activate fastforge && \
               export PATH=\$PATH:/root/.pub-cache/bin && \
+              
+              # Build
               flutter pub get && \
-              fastforge package --platform linux --targets rpm
+              fastforge package --platform linux --targets rpm \
             "
+
       - name: Prepare and rename artifacts
         run: |
           VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2)
