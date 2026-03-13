@@ -5,6 +5,11 @@
 #include <gdk/gdkx.h>
 #endif
 
+// Support for old GLib versions (AlmaLinux 8)
+#ifndef G_APPLICATION_DEFAULT_FLAGS
+#define G_APPLICATION_DEFAULT_FLAGS G_APPLICATION_FLAGS_NONE
+#endif
+
 #include "flutter/generated_plugin_registrant.h"
 #include <webview_cef/webview_cef_plugin.h>
 
