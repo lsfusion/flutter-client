@@ -132,7 +132,11 @@ jobs:
       - name: Build RPM package
         run: |
           # Configure RPM build to ignore internal shared libraries
-          echo '%__requires_exclude ^lib(flutter_.*|printing_plugin|webview_cef_plugin|cef)\\.so.*' > /root/.rpmmacros
+          # We use both __requires_exclude and _use_internal_dependency_generator
+          cat <<EOF > /root/.rpmmacros
+          %__requires_exclude ^lib(flutter_.*|printing_plugin|webview_cef_plugin|cef)\\.so.*
+          %_use_internal_dependency_generator 0
+          EOF
           
           export PATH="$PATH:/opt/flutter/bin"
           /opt/flutter/bin/dart pub global activate fastforge
