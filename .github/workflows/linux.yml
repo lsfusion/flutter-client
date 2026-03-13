@@ -133,10 +133,14 @@ jobs:
         run: |
           # Configure RPM build to ignore internal shared libraries
           # We use both __requires_exclude and _use_internal_dependency_generator
-          cat <<EOF > /root/.rpmmacros
+          # Also we disable automatic requirements discovery to avoid finding internal .so
+          cat <<EOF > $HOME/.rpmmacros
           %__requires_exclude ^lib(flutter_.*|printing_plugin|webview_cef_plugin|cef)\\.so.*
           %_use_internal_dependency_generator 0
+          %__find_requires /bin/true
+          %__find_provides /bin/true
           EOF
+          cp $HOME/.rpmmacros /root/.rpmmacros || true
           
           export PATH="$PATH:/opt/flutter/bin"
           /opt/flutter/bin/dart pub global activate fastforge
