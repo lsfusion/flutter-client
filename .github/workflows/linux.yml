@@ -8,8 +8,8 @@ on:
   workflow_call:
 
 jobs:
-  build-linux:
-    name: Build Linux
+  build-deb:
+    name: Build DEB
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -44,58 +44,22 @@ jobs:
           export PATH="$PATH:$HOME/.pub-cache/bin"
           fastforge package --platform linux --targets deb
 
-      - name: Build RPM package in AlmaLinux 8
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/app \
-            -w /app \
-            -e HOME=/root \
-            almalinux:8 \
-            /bin/bash -c " \
-              # Configure RPM build to ignore internal shared libraries
-              echo '%__requires_exclude ^lib(flutter_.*|printing_plugin|webview_cef_plugin|cef)\\.so.*' > /root/.rpmmacros && \
-              
-              # Enable EPEL and PowerTools (required for ninja-build and libappindicator)
-              dnf install -y epel-release && \
-              dnf install -y 'dnf-command(config-manager)' && \
-              dnf config-manager --set-enabled powertools && \
-              
-              # Install dependencies
-              dnf install -y clang cmake ninja-build pkg-config gtk3-devel xz-devel libappindicator-gtk3-devel rpm-build git unzip libstdc++-devel mesa-libGLU-devel libX11-devel tar xz which nss-devel nspr-devel alsa-lib-devel xclip && \
-              
-              # Install Flutter
-              curl -o /tmp/flutter.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.41.4-stable.tar.xz && \
-              mkdir -p /opt && tar -xf /tmp/flutter.tar.xz -C /opt && rm /tmp/flutter.tar.xz && \
-              export PATH=\$PATH:/opt/flutter/bin && \
-              git config --global --add safe.directory /opt/flutter && \
-              
-              # Install fastforge
-              flutter pub global activate fastforge && \
-              export PATH=\$PATH:/root/.pub-cache/bin && \
-              
-              # Build
-              flutter pub get && \
-              fastforge package --platform linux --targets rpm \
-            "
+      - name: Upload DEB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-package
+          path: dist/*.deb
 
-      - name: Prepare and rename artifacts
+      - name: Prepare and rename DEB
         run: |
           VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2)
           mkdir deploy_out
-          
-          # DEB
           DEB_FILE=$(find dist/ -name "*.deb" | head -n 1)
           if [ -f "$DEB_FILE" ]; then
             cp "$DEB_FILE" "deploy_out/flutter-client-$VERSION.deb"
           fi
-          
-          # RPM
-          RPM_FILE=$(find dist/ -name "*.rpm" | head -n 1)
-          if [ -f "$RPM_FILE" ]; then
-            cp "$RPM_FILE" "deploy_out/flutter-client-$VERSION.rpm"
-          fi
 
-      - name: Upload to CDN via FTP
+      - name: Upload DEB to CDN via FTP
         uses: sand4rt/ftp-deployer@v1.8
         with:
           host: ${{ secrets.SFTP_HOST }}
@@ -105,8 +69,87 @@ jobs:
           remote_folder: flutter/linux/
           cleanup: false
 
-      - name: Upload Linux artifacts
+  build-rpm:
+    name: Build RPM
+    runs-on: ubuntu-latest
+    container:
+      image: almalinux:8
+    steps:
+      - name: Install core tools
+        run: dnf install -y git tar xz which curl
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Enable EPEL and PowerTools
+        run: |
+          dnf install -y epel-release
+          dnf install -y 'dnf-command(config-manager)'
+          dnf config-manager --set-enabled powertools
+
+      - name: Install build dependencies
+        run: |
+          dnf install -y \
+            clang \
+            cmake \
+            ninja-build \
+            pkg-config \
+            gtk3-devel \
+            xz-devel \
+            libappindicator-gtk3-devel \
+            rpm-build \
+            unzip \
+            libstdc++-devel \
+            mesa-libGLU-devel \
+            libX11-devel \
+            nss-devel \
+            nspr-devel \
+            alsa-lib-devel \
+            xclip
+
+      - name: Install Flutter
+        run: |
+          curl -o /tmp/flutter.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.41.4-stable.tar.xz
+          mkdir -p /opt
+          tar -xf /tmp/flutter.tar.xz -C /opt
+          rm /tmp/flutter.tar.xz
+          git config --global --add safe.directory /opt/flutter
+          echo "/opt/flutter/bin" >> $GITHUB_PATH
+
+      - name: Build RPM package
+        run: |
+          # Configure RPM build to ignore internal shared libraries
+          echo '%__requires_exclude ^lib(flutter_.*|printing_plugin|webview_cef_plugin|cef)\\.so.*' > /root/.rpmmacros
+          
+          export PATH="$PATH:/opt/flutter/bin"
+          flutter pub global activate fastforge
+          export PATH="$PATH:/root/.pub-cache/bin"
+          
+          flutter pub get
+          fastforge package --platform linux --targets rpm
+
+      - name: Upload RPM artifact
         uses: actions/upload-artifact@v4
         with:
-          name: linux-packages
-          path: deploy_out/*
+          name: rpm-package
+          path: dist/*.rpm
+
+      - name: Prepare and rename RPM
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2)
+          mkdir deploy_out
+          RPM_FILE=$(find dist/ -name "*.rpm" | head -n 1)
+          if [ -f "$RPM_FILE" ]; then
+            cp "$RPM_FILE" "deploy_out/flutter-client-$VERSION.rpm"
+          fi
+
+      - name: Upload RPM to CDN via FTP
+        uses: sand4rt/ftp-deployer@v1.8
+        with:
+          host: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USERNAME }}
+          password: ${{ secrets.SFTP_PASSWORD }}
+          local_folder: deploy_out/
+          remote_folder: flutter/linux/
+          cleanup: false
+
