@@ -34,6 +34,10 @@ jobs:
             libgtk-3-dev \
             liblzma-dev \
             libappindicator3-dev \
+            libnss3-dev \
+            libnspr4-dev \
+            libasound2-dev \
+            xclip \
             sudo
 
       - name: Install Flutter
@@ -57,7 +61,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: deb-package
-          path: dist/*.deb
+          path: dist/*/*.deb
 
       - name: Prepare and rename DEB
         run: |
@@ -140,12 +144,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rpm-package
-          path: dist/*.rpm
+          path: dist/*/*.rpm
 
       - name: Prepare and rename RPM
         run: |
           VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2)
-          mkdir deploy_out
+          mkdir -p deploy_out
           RPM_FILE=$(find dist/ -name "*.rpm" | head -n 1)
           if [ -f "$RPM_FILE" ]; then
             cp "$RPM_FILE" "deploy_out/flutter-client-$VERSION.rpm"
