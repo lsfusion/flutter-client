@@ -49,10 +49,9 @@ jobs:
         run: |
           export PATH="$PATH:/opt/flutter/bin"
           /opt/flutter/bin/dart pub global activate fastforge
-          export PATH="$PATH:/root/.pub-cache/bin"
           
           /opt/flutter/bin/flutter pub get
-          /root/.pub-cache/bin/fastforge package --platform linux --targets deb
+          /opt/flutter/bin/dart pub global run fastforge package --platform linux --targets deb
 
       - name: Upload DEB artifact
         uses: actions/upload-artifact@v4
@@ -133,10 +132,9 @@ jobs:
           
           export PATH="$PATH:/opt/flutter/bin"
           /opt/flutter/bin/dart pub global activate fastforge
-          export PATH="$PATH:/root/.pub-cache/bin"
           
           /opt/flutter/bin/flutter pub get
-          /root/.pub-cache/bin/fastforge package --platform linux --targets rpm
+          /opt/flutter/bin/dart pub global run fastforge package --platform linux --targets rpm
 
       - name: Upload RPM artifact
         uses: actions/upload-artifact@v4
