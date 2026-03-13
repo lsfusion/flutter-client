@@ -10,21 +10,23 @@ on:
 jobs:
   build-deb:
     name: Build DEB
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:20.04
     steps:
+      - name: Install core tools
+        run: |
+          apt-get update
+          apt-get install -y curl git tar xz-utils libglu1-mesa file
+          
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Setup Flutter
-        uses: flutter-actions/setup-flutter@v4
-        with:
-          channel: stable
-          version: latest
-
-      - name: Install Linux dependencies (Debian)
+      - name: Install Linux dependencies (Ubuntu)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y \
             clang \
             cmake \
             ninja-build \
@@ -32,17 +34,25 @@ jobs:
             libgtk-3-dev \
             liblzma-dev \
             libappindicator3-dev \
-            file
+            sudo
 
-      - name: Install dependencies
+      - name: Install Flutter
         run: |
-          flutter pub get
-          dart pub global activate fastforge
+          curl -o /tmp/flutter.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.41.4-stable.tar.xz
+          mkdir -p /opt
+          tar -xf /tmp/flutter.tar.xz -C /opt
+          rm /tmp/flutter.tar.xz
+          git config --global --add safe.directory /opt/flutter
+          echo "/opt/flutter/bin" >> $GITHUB_PATH
 
       - name: Build DEB package
         run: |
-          export PATH="$PATH:$HOME/.pub-cache/bin"
-          fastforge package --platform linux --targets deb
+          export PATH="$PATH:/opt/flutter/bin"
+          /opt/flutter/bin/dart pub global activate fastforge
+          export PATH="$PATH:/root/.pub-cache/bin"
+          
+          /opt/flutter/bin/flutter pub get
+          /root/.pub-cache/bin/fastforge package --platform linux --targets deb
 
       - name: Upload DEB artifact
         uses: actions/upload-artifact@v4
@@ -53,7 +63,7 @@ jobs:
       - name: Prepare and rename DEB
         run: |
           VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2)
-          mkdir deploy_out
+          mkdir -p deploy_out
           DEB_FILE=$(find dist/ -name "*.deb" | head -n 1)
           if [ -f "$DEB_FILE" ]; then
             cp "$DEB_FILE" "deploy_out/flutter-client-$VERSION.deb"
@@ -122,11 +132,11 @@ jobs:
           echo '%__requires_exclude ^lib(flutter_.*|printing_plugin|webview_cef_plugin|cef)\\.so.*' > /root/.rpmmacros
           
           export PATH="$PATH:/opt/flutter/bin"
-          flutter pub global activate fastforge
+          /opt/flutter/bin/dart pub global activate fastforge
           export PATH="$PATH:/root/.pub-cache/bin"
           
-          flutter pub get
-          fastforge package --platform linux --targets rpm
+          /opt/flutter/bin/flutter pub get
+          /root/.pub-cache/bin/fastforge package --platform linux --targets rpm
 
       - name: Upload RPM artifact
         uses: actions/upload-artifact@v4
