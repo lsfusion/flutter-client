@@ -1,12 +1,16 @@
 display_name: lsFusion Flutter client
 package_name: flutter-client
+executable_name: flutter_client
+summary: lsFusion Flutter client
 icon: web/icons/Icon-192.png
 maintainer:
   name: lsFusion
   email: support@lsfusion.org
+license: MIT
 categories:
   - Office
   - Utility
+terminal: false
 depends:
   - gtk3
   - libayatana-appindicator
