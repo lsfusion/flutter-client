@@ -7,7 +7,7 @@
 
 // Support for old GLib versions (AlmaLinux 8)
 #ifndef G_APPLICATION_DEFAULT_FLAGS
-#define G_APPLICATION_DEFAULT_FLAGS G_APPLICATION_FLAGS_NONE
+#define G_APPLICATION_DEFAULT_FLAGS (GApplicationFlags)0
 #endif
 
 #include "flutter/generated_plugin_registrant.h"

@@ -22,6 +22,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Fix webview_cef paths for DEB
+        run: |
+          ln -s runner/my_application.cc linux/my_application.cc
+          ln -s runner/main.cc linux/main.cc
+
       - name: Install Linux dependencies (Ubuntu)
         run: |
           export DEBIAN_FRONTEND=noninteractive
@@ -93,6 +98,11 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Fix webview_cef paths for RPM
+        run: |
+          ln -s runner/my_application.cc linux/my_application.cc
+          ln -s runner/main.cc linux/main.cc
 
       - name: Enable EPEL and PowerTools
         run: |
@@ -207,6 +217,11 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Fix webview_cef paths for Arch
+        run: |
+          ln -s runner/my_application.cc linux/my_application.cc
+          ln -s runner/main.cc linux/main.cc
 
       - name: Install Flutter
         run: |
