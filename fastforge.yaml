@@ -9,3 +9,5 @@ makers:
     build_config: release
   - name: rpm
     build_config: release
+  - name: pacman
+    build_config: release

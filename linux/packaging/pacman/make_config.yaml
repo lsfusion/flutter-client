@@ -1,0 +1,19 @@
+display_name: lsFusion Flutter client
+package_name: flutter-client
+icon: web/icons/Icon-192.png
+maintainer:
+  name: lsFusion
+  email: support@lsfusion.org
+categories:
+  - Office
+  - Utility
+depends:
+  - gtk3
+  - libayatana-appindicator-gtk3
+  - xz
+  - nss
+  - nspr
+  - alsa-lib
+  - glu
+  - libx11
+  - webkit2gtk-4.1
