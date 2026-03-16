@@ -190,10 +190,12 @@ jobs:
             ninja \
             pkgconf \
             gtk3 \
-            libayatana-appindicator-gtk3 \
+            libayatana-appindicator \
             nss \
             nspr \
             alsa-lib \
+            glu \
+            libx11 \
             xclip \
             xz \
             webkit2gtk-4.1 \
