@@ -10,7 +10,26 @@ license: MIT
 categories:
   - Office
   - Utility
+include_dependencies: true
+is_demo: false
+isDemo: false
 terminal: false
+install_to_opt: false
+installToOpt: false
+is_system_package: false
+isSystemPackage: false
+include_ota_provider: false
+includeOtaProvider: false
+dependencies:
+  - gtk3
+  - libayatana-appindicator
+  - xz
+  - nss
+  - nspr
+  - alsa-lib
+  - glu
+  - libx11
+  - webkit2gtk-4.1
 depends:
   - gtk3
   - libayatana-appindicator
