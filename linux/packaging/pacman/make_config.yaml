@@ -22,5 +22,5 @@ dependencies:
   - libx11
   - webkit2gtk-4.1
 startup_notify: false
-package_release: 1
+package_release: '1'
 terminal: false
