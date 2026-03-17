@@ -208,6 +208,7 @@ jobs:
             libx11 \
             xclip \
             xz \
+            zstd \
             webkit2gtk-4.1 \
             git \
             curl \
@@ -248,20 +249,21 @@ jobs:
           /opt/flutter/bin/dart pub global run fastforge:main package --platform linux --targets pacman
           EOF
 
-      - name: Upload Arch artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: arch-package
-          path: dist/*/*.pkg.tar.zst
-
       - name: Prepare and rename Arch
         run: |
           VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2)
           mkdir -p deploy_out
-          ARCH_FILE=$(find dist/ -name "*.pkg.tar.zst" | head -n 1)
+          ARCH_FILE=$(find dist/ -name "*.pacman" | head -n 1)
           if [ -f "$ARCH_FILE" ]; then
-            cp "$ARCH_FILE" "deploy_out/flutter-client-$VERSION.pkg.tar.zst"
+            # Recompress to zstd to follow modern Arch Linux convention (.pkg.tar.zst)
+            xz -dc "$ARCH_FILE" | zstd -c > "deploy_out/flutter-client-$VERSION-x86_64.pkg.tar.zst"
           fi
+
+      - name: Upload Arch artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-package
+          path: deploy_out/*.pkg.tar.zst
 
       - name: Upload Arch to CDN via FTP
         uses: sand4rt/ftp-deployer@v1.8
