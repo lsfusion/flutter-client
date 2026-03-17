@@ -241,21 +241,21 @@ jobs:
           chown -R builduser:builduser .
           
           # Run build and packaging as builduser
-          sudo -u builduser bash <<EOF
-          export PATH="\$PATH:/opt/flutter/bin"
+          sudo -u builduser bash <<'EOF'
+          export PATH="$PATH:/opt/flutter/bin"
           
           # Build the flutter app bundle
           flutter pub get
           flutter build linux --release
           
           # Extract metadata
-          VERSION=\$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1)
-          PROJECT_DIR=\$(pwd)
+          VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1)
+          PROJECT_DIR=$(pwd)
           
           # Create PKGBUILD
           cat > PKGBUILD <<PKGEFF
           pkgname=flutter-client
-          pkgver=\$VERSION
+          pkgver=$VERSION
           pkgrel=1
           pkgdesc="lsFusion Flutter client"
           arch=('x86_64')
@@ -269,13 +269,13 @@ jobs:
             install -d "\$pkgdir/usr/share/\$pkgname"
             
             # Copy build bundle from build directory
-            cp -r "\$PROJECT_DIR/build/linux/x64/release/bundle/." "\$pkgdir/usr/share/\$pkgname/"
+            cp -r "$PROJECT_DIR/build/linux/x64/release/bundle/." "\$pkgdir/usr/share/\$pkgname/"
             
             # Executable symlink (using hyphen for the command name)
             ln -s "/usr/share/\$pkgname/flutter_client" "\$pkgdir/usr/bin/flutter-client"
             
             # Icon
-            install -Dm644 "\$PROJECT_DIR/web/icons/Icon-192.png" "\$pkgdir/usr/share/icons/hicolor/192x192/apps/\$pkgname.png"
+            install -Dm644 "$PROJECT_DIR/web/icons/Icon-192.png" "\$pkgdir/usr/share/icons/hicolor/192x192/apps/\$pkgname.png"
             
             # Desktop entry
             install -d "\$pkgdir/usr/share/applications"
