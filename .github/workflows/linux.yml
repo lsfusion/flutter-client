@@ -250,6 +250,7 @@ jobs:
           
           # Extract metadata
           VERSION=\$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1)
+          PROJECT_DIR=\$(pwd)
           
           # Create PKGBUILD
           cat > PKGBUILD <<PKGEFF
@@ -267,14 +268,14 @@ jobs:
             install -d "\$pkgdir/usr/bin"
             install -d "\$pkgdir/usr/share/\$pkgname"
             
-            # Copy build bundle from startdir
-            cp -r "\$startdir/build/linux/x64/release/bundle/." "\$pkgdir/usr/share/\$pkgname/"
+            # Copy build bundle from build directory
+            cp -r "\$PROJECT_DIR/build/linux/x64/release/bundle/." "\$pkgdir/usr/share/\$pkgname/"
             
             # Executable symlink (using hyphen for the command name)
             ln -s "/usr/share/\$pkgname/flutter_client" "\$pkgdir/usr/bin/flutter-client"
             
             # Icon
-            install -Dm644 "\$startdir/web/icons/Icon-192.png" "\$pkgdir/usr/share/icons/hicolor/192x192/apps/\$pkgname.png"
+            install -Dm644 "\$PROJECT_DIR/web/icons/Icon-192.png" "\$pkgdir/usr/share/icons/hicolor/192x192/apps/\$pkgname.png"
             
             # Desktop entry
             install -d "\$pkgdir/usr/share/applications"
