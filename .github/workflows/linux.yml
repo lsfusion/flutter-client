@@ -240,23 +240,68 @@ jobs:
           echo "builduser ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
           chown -R builduser:builduser .
           
-          export PATH="$PATH:/opt/flutter/bin"
-          # Run everything as builduser to satisfy makepkg
+          # Run build and packaging as builduser
           sudo -u builduser bash <<EOF
           export PATH="\$PATH:/opt/flutter/bin"
-          /opt/flutter/bin/dart pub global activate fastforge
-          /opt/flutter/bin/flutter pub get
-          /opt/flutter/bin/dart pub global run fastforge:main package --platform linux --targets pacman
+          
+          # Build the flutter app bundle
+          flutter pub get
+          flutter build linux --release
+          
+          # Extract metadata
+          VERSION=\$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1)
+          
+          # Create PKGBUILD
+          cat > PKGBUILD <<PKGEFF
+          pkgname=flutter-client
+          pkgver=\$VERSION
+          pkgrel=1
+          pkgdesc="lsFusion Flutter client"
+          arch=('x86_64')
+          url="https://lsfusion.org"
+          license=('MIT')
+          depends=('gtk3' 'libayatana-appindicator' 'xz' 'nss' 'nspr' 'alsa-lib' 'glu' 'libx11' 'webkit2gtk-4.1')
+          options=('!strip')
+          
+          package() {
+            install -d "\$pkgdir/usr/bin"
+            install -d "\$pkgdir/usr/share/\$pkgname"
+            
+            # Copy build bundle from startdir
+            cp -r "\$startdir/build/linux/x64/release/bundle/." "\$pkgdir/usr/share/\$pkgname/"
+            
+            # Executable symlink (using hyphen for the command name)
+            ln -s "/usr/share/\$pkgname/flutter_client" "\$pkgdir/usr/bin/flutter-client"
+            
+            # Icon
+            install -Dm644 "\$startdir/web/icons/Icon-192.png" "\$pkgdir/usr/share/icons/hicolor/192x192/apps/\$pkgname.png"
+            
+            # Desktop entry
+            install -d "\$pkgdir/usr/share/applications"
+            cat > "\$pkgdir/usr/share/applications/\$pkgname.desktop" <<EOD
+          [Desktop Entry]
+          Type=Application
+          Name=lsFusion Flutter client
+          Exec=flutter-client %U
+          Icon=\$pkgname
+          Categories=Office;Utility;
+          Terminal=false
+          EOD
+          }
+          PKGEFF
+          
+          # Build the package
+          makepkg -f
           EOF
 
       - name: Prepare and rename Arch
         run: |
-          VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2)
+          VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1)
           mkdir -p deploy_out
-          ARCH_FILE=$(find dist/ -name "*.pacman" | head -n 1)
+          # makepkg produces a file like flutter-client-1.0.0-1-x86_64.pkg.tar.zst
+          ARCH_FILE=$(find . -name "flutter-client-*-x86_64.pkg.tar.zst" | head -n 1)
           if [ -f "$ARCH_FILE" ]; then
-            # Recompress to zstd to follow modern Arch Linux convention (.pkg.tar.zst)
-            xz -dc "$ARCH_FILE" | zstd -c > "deploy_out/flutter-client-$VERSION-x86_64.pkg.tar.zst"
+            cp "$ARCH_FILE" "deploy_out/flutter-client-$VERSION-x86_64.pkg.tar.zst"
           fi
 
       - name: Upload Arch artifact
