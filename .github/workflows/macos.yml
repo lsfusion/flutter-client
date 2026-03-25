@@ -37,15 +37,15 @@ jobs:
         
       - name: Create beautiful DMG
         run: |
-          APP_PATH="build/macos/Build/Products/Release/flutter_client.app"
-          DMG_PATH="build/macos/Build/Products/Release/flutter_client-macos.dmg"
+          APP_PATH="build/macos/Build/Products/Release/lsfusion_client.app"
+          DMG_PATH="build/macos/Build/Products/Release/lsfusion_client-macos.dmg"
 
           create-dmg \
-            --volname "flutter_client" \
+            --volname "lsfusion_client" \
             --window-pos 200 120 \
             --window-size 800 400 \
             --icon-size 100 \
-            --icon "flutter_client.app" 200 190 \
+            --icon "lsfusion_client.app" 200 190 \
             --app-drop-link 600 185 \
             --no-internet-enable \
             "$DMG_PATH" \
@@ -54,7 +54,7 @@ jobs:
       - name: Prepare and rename artifacts
         run: |
           mkdir deploy_out
-          cp build/macos/Build/Products/Release/flutter_client-macos.dmg deploy_out/
+          cp build/macos/Build/Products/Release/lsfusion_client-macos.dmg deploy_out/
 
       - name: Upload to CDN via FTP
         uses: sand4rt/ftp-deployer@v1.8
@@ -70,8 +70,8 @@ jobs:
       - name: Upload DMG
         uses: actions/upload-artifact@v4
         with:
-          name: flutter_client-macos
-          path: build/macos/Build/Products/Release/flutter_client-macos.dmg  
+          name: lsfusion_client-macos
+          path: build/macos/Build/Products/Release/lsfusion_client-macos.dmg  
         
         
 #      - name: Create DMG
@@ -79,30 +79,30 @@ jobs:
 #          cd build/macos/Build/Products/Release
 #
 #          mkdir dmg
-#          cp -r flutter_client.app dmg/
+#          cp -r lsfusion_client.app dmg/
 #
 #          hdiutil create \
-#            -volname "flutter_client" \
+#            -volname "lsfusion_client" \
 #            -srcfolder dmg \
 #            -ov \
 #            -format UDZO \
-#            flutter_client-macos.dmg
+#            lsfusion_client-macos.dmg
 #
 #      - name: Upload DMG
 #        uses: actions/upload-artifact@v4
 #        with:
-#          name: flutter_client-macos
-#          path: build/macos/Build/Products/Release/flutter_client-macos.dmg
+#          name: lsfusion_client-macos
+#          path: build/macos/Build/Products/Release/lsfusion_client-macos.dmg
           
           
         
 #      - name: Zip macOS build
 #        run: |
 #          cd build/macos/Build/Products/Release
-#          zip -r flutter_client-macos.zip flutter_client.app
+#          zip -r lsfusion_client-macos.zip lsfusion_client.app
 #
 #      - name: Upload macOS build
 #        uses: actions/upload-artifact@v4
 #        with:
 #          name: macos-build
-#          path: build/macos/Build/Products/Release/flutter_client-macos.zip
+#          path: build/macos/Build/Products/Release/lsfusion_client-macos.zip

@@ -114,17 +114,17 @@ jobs:
           if ($null -eq $msixFile) { 
             throw "MSIX file not found in $outputDir!" 
           }
-          $newName = "flutter-client-$finalVersion.msix"
+          $newName = "lsfusion-client-$finalVersion.msix"
           $finalMsixPath = Join-Path $outputDir $newName
           # Переименовываем файл
           Move-Item -Path $msixFile.FullName -Destination $finalMsixPath -Force
           Write-Host "Signed file renamed to: $newName in folder $outputDir"
           Copy-Item -Path $finalMsixPath -Destination "."
           
-          (Get-Content windows/flutter-client.appinstaller.template) `
+          (Get-Content windows/lsfusion-client.appinstaller.template) `
             -replace '\$\{VERSION\}', $finalVersion `
             -replace '\$\{MSIX_NAME\}', $newName `
-            | Out-File -FilePath "$outputDir/flutter-client.appinstaller" -Encoding utf8
+            | Out-File -FilePath "$outputDir/lsfusion-client.appinstaller" -Encoding utf8
           
           Write-Host "AppInstaller generated for version: $finalVersion"
         shell: pwsh
@@ -145,5 +145,5 @@ jobs:
         with:
           name: windows-msix
           path: |
-            flutter-client-*.msix
-            flutter-client.appinstaller
+            lsfusion-client-*.msix
+            lsfusion-client.appinstaller

@@ -1,5 +1,5 @@
-name: flutter_client
-description: "lsFusion Flutter client"
+name: lsfusion_client
+description: "lsFusion client"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -61,14 +61,14 @@ dev_dependencies:
   fastforge: ^0.6.6
 
 msix_config:
-  display_name: lsFusion Flutter client
+  display_name: lsFusion Client
   publisher_display_name: lsFusion
   publisher: CN=Aliaksei Kirkouski, O=Aliaksei Kirkouski, L=Warsaw, S=Masovian Voivodeship, C=PL
-  identity_name: com.lsfusion.flutterclient
+  identity_name: com.lsfusion.client
 #  msix_version: 1.0.0.0
   capabilities: internetClient
   sign_msix: false
-  output_name: flutter-client
+  output_name: lsfusion-client
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

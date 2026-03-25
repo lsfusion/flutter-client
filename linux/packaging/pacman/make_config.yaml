@@ -1,7 +1,7 @@
-display_name: lsFusion Flutter client
-package_name: flutter-client
-executable_name: flutter_client
-summary: lsFusion Flutter client
+display_name: lsFusion client
+package_name: lsfusion-client
+executable_name: lsfusion_client
+summary: lsFusion client
 icon: web/icons/Icon-192.png
 maintainer:
   name: lsFusion

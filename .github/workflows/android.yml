@@ -31,7 +31,7 @@ jobs:
         run: |
           VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2)
           mkdir deploy_out
-          cp build/app/outputs/flutter-apk/app-release.apk "deploy_out/flutter-client-$VERSION.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk "deploy_out/lsfusion-client-$VERSION.apk"
 
       - name: Upload to CDN via FTP
         uses: sand4rt/ftp-deployer@v1.8

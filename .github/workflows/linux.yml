@@ -74,7 +74,7 @@ jobs:
           mkdir -p deploy_out
           DEB_FILE=$(find dist/ -name "*.deb" | head -n 1)
           if [ -f "$DEB_FILE" ]; then
-            cp "$DEB_FILE" "deploy_out/flutter-client-$VERSION.deb"
+            cp "$DEB_FILE" "deploy_out/lsfusion-client-$VERSION.deb"
           fi
 
       - name: Upload DEB to CDN via FTP
@@ -170,7 +170,7 @@ jobs:
           mkdir -p deploy_out
           RPM_FILE=$(find dist/ -name "*.rpm" | head -n 1)
           if [ -f "$RPM_FILE" ]; then
-            cp "$RPM_FILE" "deploy_out/flutter-client-$VERSION.rpm"
+            cp "$RPM_FILE" "deploy_out/lsfusion-client-$VERSION.rpm"
           fi
 
       - name: Upload RPM to CDN via FTP
@@ -254,10 +254,10 @@ jobs:
           
           # Create PKGBUILD
           cat > PKGBUILD <<PKGEFF
-          pkgname=flutter-client
+          pkgname=lsfusion-client
           pkgver=$VERSION
           pkgrel=1
-          pkgdesc="lsFusion Flutter client"
+          pkgdesc="lsFusion client"
           arch=('x86_64')
           url="https://lsfusion.org"
           license=('MIT')
@@ -272,7 +272,7 @@ jobs:
             cp -r "$PROJECT_DIR/build/linux/x64/release/bundle/." "\$pkgdir/usr/share/\$pkgname/"
             
             # Executable symlink (using hyphen for the command name)
-            ln -s "/usr/share/\$pkgname/flutter_client" "\$pkgdir/usr/bin/flutter-client"
+            ln -s "/usr/share/\$pkgname/lsfusion_client" "\$pkgdir/usr/bin/lsfusion-client"
             
             # Icon
             install -Dm644 "$PROJECT_DIR/web/icons/Icon-192.png" "\$pkgdir/usr/share/icons/hicolor/192x192/apps/\$pkgname.png"
@@ -282,8 +282,8 @@ jobs:
             cat > "\$pkgdir/usr/share/applications/\$pkgname.desktop" <<EOD
           [Desktop Entry]
           Type=Application
-          Name=lsFusion Flutter client
-          Exec=flutter-client %U
+          Name=lsFusion client
+          Exec=lsfusion-client %U
           Icon=\$pkgname
           Categories=Office;Utility;
           Terminal=false
@@ -299,10 +299,10 @@ jobs:
         run: |
           VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1)
           mkdir -p deploy_out
-          # makepkg produces a file like flutter-client-1.0.0-1-x86_64.pkg.tar.zst
-          ARCH_FILE=$(find . -name "flutter-client-*-x86_64.pkg.tar.zst" | head -n 1)
+          # makepkg produces a file like lsfusion-client-1.0.0-1-x86_64.pkg.tar.zst
+          ARCH_FILE=$(find . -name "lsfusion-client-*-x86_64.pkg.tar.zst" | head -n 1)
           if [ -f "$ARCH_FILE" ]; then
-            cp "$ARCH_FILE" "deploy_out/flutter-client-$VERSION-x86_64.pkg.tar.zst"
+            cp "$ARCH_FILE" "deploy_out/lsfusion-client-$VERSION-x86_64.pkg.tar.zst"
           fi
 
       - name: Upload Arch artifact

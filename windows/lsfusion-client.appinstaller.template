@@ -2,10 +2,10 @@
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
     Version="${VERSION}"
-    Uri="https://download.lsfusion.org/flutter/windows/flutter-client.appinstaller">
+    Uri="https://download.lsfusion.org/flutter/windows/lsfusion-client.appinstaller">
 
     <MainPackage
-        Name="com.lsfusion.flutterclient"
+        Name="com.lsfusion.client"
         Publisher="CN=Aliaksei Kirkouski, O=Aliaksei Kirkouski, L=Warsaw, S=Masovian Voivodeship, C=PL"
         Version="${VERSION}"
         ProcessorArchitecture="x64"
