@@ -3,7 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart' as flutter;
 import 'package:webview_windows/webview_windows.dart' as wv;
-import 'package:webview_cef/webview_cef.dart' as cef;
+import 'package:lsf_webview_linux/lsf_webview.dart'
+    if (dart.library.html) 'package:lsf_webview_windows/lsf_webview.dart' as cef;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'address_bar.dart';
@@ -118,11 +119,12 @@ class _WebViewPageState extends State<WebViewPage> {
   }
 
   void _initCefWebView() async {
-    await cef.WebviewManager().initialize();
-    final controller = cef.WebviewManager().createWebView();
+    final manager = cef.getWebviewManager();
+    await manager.initialize();
+    final controller = manager.createWebView();
     _cefWebViewController = controller;
 
-    controller.setWebviewListener(cef.WebviewEventsListener(
+    controller.setWebviewListener(cef.createWebviewEventsListener(
       onLoadStart: (c, url) {
         setState(() => _isLoading = true);
       },
@@ -134,7 +136,7 @@ class _WebViewPageState extends State<WebViewPage> {
     await controller.initialize(_currentUrl);
 
     controller.setJavaScriptChannels({
-      cef.JavascriptChannel(
+      cef.createJavascriptChannel(
         name: 'Flutter',
         onMessageReceived: (cef.JavascriptMessage message) async {
           controller.executeJavaScript(await execute(message.message));
@@ -252,7 +254,7 @@ class _WebViewPageState extends State<WebViewPage> {
                       : const Center(child: CircularProgressIndicator()))
                   : (isLinux
                       ? (_cefControllerReady && _cefWebViewController != null
-                          ? cef.WebView(_cefWebViewController!)
+                          ? cef.LsfWebView(controller: _cefWebViewController!)
                           : const Center(child: CircularProgressIndicator()))
                       : (_flutterWebViewController != null
                           ? flutter.WebViewWidget(controller: _flutterWebViewController!)
