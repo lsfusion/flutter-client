@@ -4,8 +4,9 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   flutter_libserialport
+  fullscreen_window
   printing
-  webview_cef
+  webview_win_floating
   webview_windows
 )
 

@@ -264,6 +264,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  fullscreen_window:
+    dependency: transitive
+    description:
+      name: fullscreen_window
+      sha256: "262a19366157542c3e1fa07232ee7e8a5c82e5223d912b04a2771c47aa6a048d"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.2.1"
   get_it:
     dependency: transitive
     description:
@@ -789,14 +797,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.1"
-  webview_cef:
-    dependency: "direct main"
-    description:
-      name: webview_cef
-      sha256: "2e660bf593dc1168beb7b765dd477a703e0b29968669f017e178c2c716f6437f"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.2.2"
   webview_flutter:
     dependency: "direct main"
     description:
@@ -829,6 +829,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.23.5"
+  webview_win_floating:
+    dependency: "direct main"
+    description:
+      name: webview_win_floating
+      sha256: "06c49ae0490063be3911d3561c498f6847f9d31f9e60edc0ab7573bab8264476"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.0.2"
   webview_windows:
     dependency: "direct main"
     description:

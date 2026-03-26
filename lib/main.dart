@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart' as flutter;
 import 'package:webview_windows/webview_windows.dart' as wv;
-import 'package:webview_cef/webview_cef.dart' as cef;
+import 'package:webview_win_floating/webview_win_floating.dart' as win;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'address_bar.dart';
@@ -36,9 +36,9 @@ class WebViewPage extends StatefulWidget {
 class _WebViewPageState extends State<WebViewPage> {
   flutter.WebViewController? _flutterWebViewController;
   wv.WebviewController? _windowsWebViewController;
-  dynamic _cefWebViewController;
+  win.WinWebViewController? _winWebViewController;
   bool _windowsControllerReady = false;
-  bool _cefControllerReady = false;
+  bool _winControllerReady = false;
 
   bool _showAddressBar = false;
   bool _isLoading = false;
@@ -58,7 +58,7 @@ class _WebViewPageState extends State<WebViewPage> {
     if (isWindows) {
       _initWindowsWebView();
     } else if (isLinux) {
-      _initCefWebView();
+      _initWinWebView();
     }
   }
 
@@ -117,33 +117,31 @@ class _WebViewPageState extends State<WebViewPage> {
     });
   }
 
-  void _initCefWebView() async {
-    await cef.WebviewManager().initialize();
-    final controller = cef.WebviewManager().createWebView();
-    _cefWebViewController = controller;
+  void _initWinWebView() async {
+    _winWebViewController = win.WinWebViewController();
 
-    controller.setWebviewListener(cef.WebviewEventsListener(
-      onLoadStart: (c, url) {
+    await _winWebViewController!.setNavigationDelegate(win.WinNavigationDelegate(
+      onPageStarted: (url) {
         setState(() => _isLoading = true);
       },
-      onLoadEnd: (c, url) {
+      onPageFinished: (url) {
         setState(() => _isLoading = false);
       },
     ));
 
-    await controller.initialize(_currentUrl);
+    await _winWebViewController!.setJavaScriptMode(flutter.JavaScriptMode.unrestricted);
 
-    controller.setJavaScriptChannels({
-      cef.JavascriptChannel(
-        name: 'Flutter',
-        onMessageReceived: (cef.JavascriptMessage message) async {
-          controller.executeJavaScript(await execute(message.message));
-        },
-      )
-    });
+    await _winWebViewController!.addJavaScriptChannel(
+      'Flutter',
+      onMessageReceived: (message) async {
+        _winWebViewController!.runJavaScript(await execute(message.message));
+      },
+    );
+
+    await _winWebViewController!.loadRequest(Uri.parse(_currentUrl));
 
     setState(() {
-      _cefControllerReady = true;
+      _winControllerReady = true;
     });
   }
 
@@ -236,7 +234,7 @@ class _WebViewPageState extends State<WebViewPage> {
                       if (isWindows) {
                         _windowsWebViewController?.loadUrl(url);
                       } else if (isLinux) {
-                        _cefWebViewController?.loadUrl(url);
+                        _winWebViewController?.loadRequest(Uri.parse(url));
                       } else {
                         _flutterWebViewController?.loadRequest(Uri.parse(url));
                       }
@@ -251,8 +249,8 @@ class _WebViewPageState extends State<WebViewPage> {
                       ? wv.Webview(_windowsWebViewController!)
                       : const Center(child: CircularProgressIndicator()))
                   : (isLinux
-                      ? (_cefControllerReady && _cefWebViewController != null
-                          ? cef.WebView(_cefWebViewController!)
+                      ? (_winControllerReady && _winWebViewController != null
+                          ? win.WinWebViewWidget(controller: _winWebViewController!)
                           : const Center(child: CircularProgressIndicator()))
                       : (_flutterWebViewController != null
                           ? flutter.WebViewWidget(controller: _flutterWebViewController!)
