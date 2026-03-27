@@ -12,12 +12,12 @@ jobs:
     name: Build DEB
     runs-on: ubuntu-latest
     container:
-      image: ubuntu:20.04
+      image: ubuntu:22.04
     steps:
       - name: Install core tools
         run: |
           apt-get update
-          apt-get install -y curl git tar xz-utils libglu1-mesa file
+          apt-get install -y curl git tar xz-utils libglu1-mesa-dev file
           
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -38,10 +38,11 @@ jobs:
             pkg-config \
             libgtk-3-dev \
             liblzma-dev \
-            libappindicator3-dev \
+            libayatana-appindicator3-dev \
             libnss3-dev \
             libnspr4-dev \
             libasound2-dev \
+            libwebkit2gtk-4.1-dev \
             xclip \
             sudo
 
@@ -91,7 +92,7 @@ jobs:
     name: Build RPM
     runs-on: ubuntu-latest
     container:
-      image: almalinux:8
+      image: almalinux:9
     steps:
       - name: Install core tools
         run: dnf install -y git tar xz which curl
@@ -104,11 +105,11 @@ jobs:
           ln -s runner/my_application.cc linux/my_application.cc
           ln -s runner/main.cc linux/main.cc
 
-      - name: Enable EPEL and PowerTools
+      - name: Enable EPEL and CRB
         run: |
           dnf install -y epel-release
           dnf install -y 'dnf-command(config-manager)'
-          dnf config-manager --set-enabled powertools
+          dnf config-manager --set-enabled crb
 
       - name: Install build dependencies
         run: |
@@ -119,7 +120,7 @@ jobs:
             pkg-config \
             gtk3-devel \
             xz-devel \
-            libappindicator-gtk3-devel \
+            webkit2gtk4.1-devel \
             rpm-build \
             unzip \
             libstdc++-devel \
