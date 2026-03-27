@@ -22,7 +22,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Prepare build environment for DEB
+      - name: Fix webview_cef paths for DEB
         run: |
           ln -s runner/my_application.cc linux/my_application.cc
           ln -s runner/main.cc linux/main.cc
@@ -99,7 +99,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Prepare build environment for RPM
+      - name: Fix webview_cef paths for RPM
         run: |
           ln -s runner/my_application.cc linux/my_application.cc
           ln -s runner/main.cc linux/main.cc
@@ -145,7 +145,7 @@ jobs:
           # We use both __requires_exclude and _use_internal_dependency_generator
           # Also we disable automatic requirements discovery to avoid finding internal .so
           cat <<EOF > $HOME/.rpmmacros
-          %__requires_exclude ^lib(flutter_.*|printing_plugin|webview_win_floating_plugin|cef)\\.so.*
+          %__requires_exclude ^lib(flutter_.*|printing_plugin|webview_cef_plugin|cef)\\.so.*
           %_use_internal_dependency_generator 0
           %__find_requires /bin/true
           %__find_provides /bin/true
@@ -219,7 +219,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Prepare build environment for Arch
+      - name: Fix webview_cef paths for Arch
         run: |
           ln -s runner/my_application.cc linux/my_application.cc
           ln -s runner/main.cc linux/main.cc
