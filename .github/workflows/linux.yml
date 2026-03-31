@@ -98,6 +98,7 @@ jobs:
         run: |
           dnf install -y --allowerasing git tar xz which curl epel-release 'dnf-command(config-manager)'
           dnf config-manager --set-enabled crb
+          dnf update -y
           dnf makecache
 
       - name: Checkout repository
@@ -116,7 +117,7 @@ jobs:
             ninja-build \
             pkg-config \
             gtk3-devel \
-            webkit2gtk4.1-devel \
+            'pkgconfig(webkit2gtk-4.1)' \
             xz-devel \
             libayatana-appindicator-gtk3-devel \
             rpm-build \

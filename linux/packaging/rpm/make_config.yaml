@@ -9,6 +9,9 @@ categories:
   - Utility
 requires:
   - gtk3
+  - mesa-libGL
+  - mesa-libEGL
+  - webkit2gtk4.1
   - libappindicator-gtk3
   - xz-libs
   - libstdc++
