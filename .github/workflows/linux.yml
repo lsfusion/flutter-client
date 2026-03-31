@@ -95,7 +95,10 @@ jobs:
       image: almalinux:9
     steps:
       - name: Install core tools
-        run: dnf install -y --allowerasing git tar xz which curl epel-release
+        run: |
+          dnf install -y --allowerasing git tar xz which curl epel-release 'dnf-command(config-manager)'
+          dnf config-manager --set-enabled crb
+          dnf makecache
 
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -105,12 +108,6 @@ jobs:
           ln -s runner/my_application.cc linux/my_application.cc
           ln -s runner/main.cc linux/main.cc
 
-      - name: Enable CRB and EPEL
-        run: |
-          dnf install -y --allowerasing 'dnf-command(config-manager)' epel-release
-          dnf config-manager --set-enabled crb
-          dnf makecache
-
       - name: Install build dependencies
         run: |
           dnf install -y --allowerasing \
@@ -119,7 +116,7 @@ jobs:
             ninja-build \
             pkg-config \
             gtk3-devel \
-            webkit2gtk3-devel \
+            webkit2gtk4.1-devel \
             xz-devel \
             libayatana-appindicator-gtk3-devel \
             rpm-build \
