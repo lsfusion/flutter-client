@@ -20,6 +20,10 @@ requires:
   - libstdc++
   - mesa-libGLU
   - libX11
+  - libXcursor
+  - libXinerama
+  - libXrandr
+  - libXi
   - nss
   - nspr
   - alsa-lib
