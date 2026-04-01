@@ -20,6 +20,13 @@ dependencies:
   - alsa-lib
   - glu
   - libx11
+  - libxcursor
+  - libxinerama
+  - libxrandr
+  - libxi
+  - libxrender
+  - libxfixes
+  - libxtst
   - webkit2gtk-4.1
   - mesa
   - libserialport
