@@ -13,7 +13,9 @@ categories:
 dependencies:
   - libgtk-3-0
   - libgl1
+  - libgl1-mesa-glx
   - libgl1-mesa-dri
+  - libegl-mesa0
   - libglvnd0
   - libglx0
   - libegl1
