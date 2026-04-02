@@ -11,9 +11,6 @@ requires:
   - gtk3
   - mesa-libGL
   - mesa-libEGL
-  - mesa-libGLES
-  - mesa-libgbm
-  - mesa-dri-drivers
   - webkit2gtk4.1
   - libappindicator-gtk3
   - xz-libs
@@ -23,5 +20,3 @@ requires:
   - nss
   - nspr
   - alsa-lib
-  - libserialport
-  - cups-libs
