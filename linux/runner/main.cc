@@ -14,15 +14,6 @@ int main(int argc, char** argv) {
   // Wayland can sometimes have issues with shared OpenGL contexts.
   g_setenv("GDK_BACKEND", "x11", TRUE);
 
-  // Forcing WebKit to use GLX when X11 backend is forced often resolves context issues.
-  g_setenv("WEBKIT_USE_GLX", "1", TRUE);
-
-  // Disable accelerated 2D canvas in WebKit to avoid context conflicts.
-  g_setenv("WEBKIT_DISABLE_ACCELERATED_2D_CANVAS", "1", TRUE);
-
-  // Use GLES for better compatibility with Flutter's GL implementation.
-  g_setenv("GDK_GL", "gles", TRUE);
-
   g_autoptr(MyApplication) app = my_application_new();
   return g_application_run(G_APPLICATION(app), argc, argv);
 }

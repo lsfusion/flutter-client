@@ -29,7 +29,6 @@ dependencies:
   - libxtst
   - webkit2gtk-4.1
   - mesa
-  - libglvnd
   - libserialport
   - cups
 startup_notify: false
