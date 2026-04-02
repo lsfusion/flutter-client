@@ -24,9 +24,6 @@ requires:
   - libXinerama
   - libXrandr
   - libXi
-  - libXrender
-  - libXfixes
-  - libXtst
   - nss
   - nspr
   - alsa-lib

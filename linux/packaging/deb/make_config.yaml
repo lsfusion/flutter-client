@@ -25,11 +25,8 @@ dependencies:
   - libxcb1
   - libxcursor1
   - libxinerama1
-  - libxrandr2
+  - libxrandr1
   - libxi6
-  - libxrender1
-  - libxfixes3
-  - libxtst6
   - libnss3
   - libnspr4
   - libasound2
