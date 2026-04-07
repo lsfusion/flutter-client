@@ -119,9 +119,9 @@ jobs:
             ninja-build \
             pkg-config \
             gtk3-devel \
-            webkit2gtk3-devel \
+            webkit2gtk4.1-devel \
             xz-devel \
-            libayatana-appindicator-gtk3-devel \
+            libayatana-appindicator-devel \
             rpm-build \
             unzip \
             libstdc++-devel \
