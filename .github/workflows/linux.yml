@@ -95,7 +95,7 @@ jobs:
       image: almalinux:9
     steps:
       - name: Install core tools
-        run: dnf install -y --allowerasing git tar xz which curl
+        run: dnf install -y git tar xz which curl
 
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -107,13 +107,13 @@ jobs:
 
       - name: Enable CRB and EPEL
         run: |
-          dnf install -y --allowerasing epel-release
-          dnf install -y --allowerasing 'dnf-command(config-manager)'
+          dnf install -y epel-release
+          dnf install -y 'dnf-command(config-manager)'
           dnf config-manager --set-enabled crb
 
       - name: Install build dependencies
         run: |
-          dnf install -y --allowerasing \
+          dnf install -y \
             clang \
             cmake \
             ninja-build \
