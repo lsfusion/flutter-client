@@ -8,13 +8,16 @@
 
 #include <flutter_libserialport/flutter_libserialport_plugin.h>
 #include <printing/printing_plugin.h>
-#include <webview_all_windows/webview_windows_plugin.h>
+#include <webview_cef/webview_cef_plugin_c_api.h>
+#include <webview_windows/webview_windows_plugin.h>
 
 void RegisterPlugins(flutter::PluginRegistry* registry) {
   FlutterLibserialportPluginRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("FlutterLibserialportPlugin"));
   PrintingPluginRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("PrintingPlugin"));
+  WebviewCefPluginCApiRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("WebviewCefPluginCApi"));
   WebviewWindowsPluginRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("WebviewWindowsPlugin"));
 }

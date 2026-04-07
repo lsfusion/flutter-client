@@ -8,7 +8,7 @@
 
 #include <flutter_libserialport/flutter_libserialport_plugin.h>
 #include <printing/printing_plugin.h>
-#include <webview_all_linux/webview_all_linux_plugin.h>
+#include <webview_cef/webview_cef_plugin.h>
 
 void fl_register_plugins(FlPluginRegistry* registry) {
   g_autoptr(FlPluginRegistrar) flutter_libserialport_registrar =
@@ -17,7 +17,7 @@ void fl_register_plugins(FlPluginRegistry* registry) {
   g_autoptr(FlPluginRegistrar) printing_registrar =
       fl_plugin_registry_get_registrar_for_plugin(registry, "PrintingPlugin");
   printing_plugin_register_with_registrar(printing_registrar);
-  g_autoptr(FlPluginRegistrar) webview_all_linux_registrar =
-      fl_plugin_registry_get_registrar_for_plugin(registry, "WebviewAllLinuxPlugin");
-  webview_all_linux_plugin_register_with_registrar(webview_all_linux_registrar);
+  g_autoptr(FlPluginRegistrar) webview_cef_registrar =
+      fl_plugin_registry_get_registrar_for_plugin(registry, "WebviewCefPlugin");
+  webview_cef_plugin_register_with_registrar(webview_cef_registrar);
 }
