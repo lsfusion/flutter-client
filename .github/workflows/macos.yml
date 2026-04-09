@@ -68,7 +68,7 @@ jobs:
           cleanup: false
 
       - name: Upload DMG
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: lsfusion_client-macos
           path: build/macos/Build/Products/Release/lsfusion_client-macos.dmg  

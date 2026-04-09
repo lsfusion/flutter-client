@@ -45,7 +45,7 @@ jobs:
           cleanup: false
   
       - name: Upload Android APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: android-apk
           path: deploy_out/*
