@@ -1,10 +1,10 @@
 # Project-level configuration.
 cmake_minimum_required(VERSION 3.14)
-project(flutter_client LANGUAGES CXX)
+project(lsfusion_client LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
-set(BINARY_NAME "flutter_client")
+set(BINARY_NAME "lsfusion_client")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
@@ -49,13 +49,25 @@ endfunction()
 set(FLUTTER_MANAGED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/flutter")
 add_subdirectory(${FLUTTER_MANAGED_DIR})
 
+# Filter out linux-only plugins (webview_cef) from generated files
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/flutter/generated_plugins.cmake" _gen_plugins_content)
+string(REPLACE "  webview_cef\n" "" _gen_plugins_content "${_gen_plugins_content}")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated_plugins_filtered.cmake" "${_gen_plugins_content}")
+
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/flutter/generated_plugin_registrant.cc" _gen_reg_content)
+string(REGEX REPLACE "#include <webview_cef/[^\n]*>\n" "" _gen_reg_content "${_gen_reg_content}")
+string(REGEX REPLACE "  [^\n]*WebviewCef[^\n]*\n" "" _gen_reg_content "${_gen_reg_content}")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated_plugin_registrant.cc" "${_gen_reg_content}")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/flutter/generated_plugin_registrant.h"
+  "${CMAKE_CURRENT_BINARY_DIR}/generated_plugin_registrant.h" COPYONLY)
+set(FILTERED_PLUGIN_REGISTRANT "${CMAKE_CURRENT_BINARY_DIR}/generated_plugin_registrant.cc" CACHE INTERNAL "")
+
 # Application build; see runner/CMakeLists.txt.
 add_subdirectory("runner")
 
-
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
-include(flutter/generated_plugins.cmake)
+include(${CMAKE_CURRENT_BINARY_DIR}/generated_plugins_filtered.cmake)
 
 
 # === Installation ===

@@ -8,7 +8,44 @@ on:
   workflow_call:
 
 jobs:
-  dummy:
+  build-android:
+    name: Build Android
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Placeholder workflow"
+      - name: Checkout repository
+        uses: actions/checkout@v6
+  
+      - name: Setup Flutter
+        uses: flutter-actions/setup-flutter@v4
+        with:
+          channel: stable
+          version: latest
+
+      - name: Install dependencies
+        run: flutter pub get
+        
+      - name: Build Android APK
+        run: flutter build apk --release
+
+      - name: Prepare and rename artifacts
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2)
+          mkdir deploy_out
+          cp build/app/outputs/flutter-apk/app-release.apk "deploy_out/lsfusion-client-$VERSION.apk"
+
+      - name: Upload to CDN via FTP
+        uses: sand4rt/ftp-deployer@v1.8
+        with:
+          host: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USERNAME }}
+          password: ${{ secrets.SFTP_PASSWORD }}
+          port: 21
+          local_folder: deploy_out/
+          remote_folder: flutter/android/
+          cleanup: false
+  
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v6
+        with:
+          name: android-apk
+          path: deploy_out/*

@@ -1,9 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter/webview_flutter.dart' as flutter;
 import 'package:webview_windows/webview_windows.dart' as wv;
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'cef_webview_stub.dart'
+    if (dart.library.io) 'cef_webview_impl.dart';
 
 import 'address_bar.dart';
 import 'native.dart';
@@ -33,19 +36,19 @@ class WebViewPage extends StatefulWidget {
 }
 
 class _WebViewPageState extends State<WebViewPage> {
-  WebViewController? _flutterWebViewController;
+  flutter.WebViewController? _flutterWebViewController;
   wv.WebviewController? _windowsWebViewController;
+  CefWebViewHelper? _cefHelper;
   bool _windowsControllerReady = false;
 
   bool _showAddressBar = false;
   bool _isLoading = false;
   bool _isReady = false;
 
-  // String _currentUrl = 'http://192.168.1.44:8080/lsf';
-  // String _currentUrl = 'https://demo.lsfusion.org/mycompany/';
-  String _currentUrl = 'http://192.168.1.44:8888/main';
+  String _currentUrl = 'http://127.0.0.1:8080/main';
 
   bool get isWindows => Platform.isWindows;
+  bool get isLinux => Platform.isLinux;
 
   @override
   void initState() {
@@ -53,6 +56,8 @@ class _WebViewPageState extends State<WebViewPage> {
     _loadLastUrl();
     if (isWindows) {
       _initWindowsWebView();
+    } else if (isLinux) {
+      _initCefWebView();
     }
   }
 
@@ -63,7 +68,7 @@ class _WebViewPageState extends State<WebViewPage> {
       _currentUrl = history.last;
     }
 
-    if (!isWindows) {
+    if (!isWindows && !isLinux) {
       _initFlutterWebView();
     }
 
@@ -73,17 +78,17 @@ class _WebViewPageState extends State<WebViewPage> {
   }
 
   void _initFlutterWebView() {
-    _flutterWebViewController = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+    _flutterWebViewController = flutter.WebViewController()
+      ..setJavaScriptMode(flutter.JavaScriptMode.unrestricted)
       ..addJavaScriptChannel(
         'Flutter',
-        onMessageReceived: (JavaScriptMessage message) async {
+        onMessageReceived: (flutter.JavaScriptMessage message) async {
           _flutterWebViewController!.runJavaScript(
             await execute(message.message),
           );
         },
       )
-      ..setNavigationDelegate(NavigationDelegate(
+      ..setNavigationDelegate(flutter.NavigationDelegate(
         onPageStarted: (_) {
           setState(() => _isLoading = true);
         },
@@ -109,6 +114,17 @@ class _WebViewPageState extends State<WebViewPage> {
     setState(() {
       _windowsControllerReady = true;
     });
+  }
+
+  void _initCefWebView() async {
+    _cefHelper = CefWebViewHelper();
+    await _cefHelper!.initialize(
+      _currentUrl,
+      onLoadStart: () => setState(() => _isLoading = true),
+      onLoadEnd: () => setState(() => _isLoading = false),
+      onMessage: (message) => execute(message),
+    );
+    setState(() {});
   }
 
   Future<String> execute(message) async {
@@ -199,6 +215,8 @@ class _WebViewPageState extends State<WebViewPage> {
                       });
                       if (isWindows) {
                         _windowsWebViewController?.loadUrl(url);
+                      } else if (isLinux) {
+                        _cefHelper?.loadUrl(url);
                       } else {
                         _flutterWebViewController?.loadRequest(Uri.parse(url));
                       }
@@ -212,9 +230,13 @@ class _WebViewPageState extends State<WebViewPage> {
                   ? (_windowsControllerReady && _windowsWebViewController != null
                       ? wv.Webview(_windowsWebViewController!)
                       : const Center(child: CircularProgressIndicator()))
-                  : (_flutterWebViewController != null
-                      ? WebViewWidget(controller: _flutterWebViewController!)
-                      : const Center(child: CircularProgressIndicator())),
+                  : (isLinux
+                      ? (_cefHelper != null && _cefHelper!.isReady
+                          ? _cefHelper!.buildWebView()
+                          : const Center(child: CircularProgressIndicator()))
+                      : (_flutterWebViewController != null
+                          ? flutter.WebViewWidget(controller: _flutterWebViewController!)
+                          : const Center(child: CircularProgressIndicator()))),
             ),
           ],
         ),

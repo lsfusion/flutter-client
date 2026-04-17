@@ -5,7 +5,13 @@
 #include <gdk/gdkx.h>
 #endif
 
+// Support for old GLib versions (AlmaLinux 8)
+#ifndef G_APPLICATION_DEFAULT_FLAGS
+#define G_APPLICATION_DEFAULT_FLAGS (GApplicationFlags)0
+#endif
+
 #include "flutter/generated_plugin_registrant.h"
+#include <webview_cef/webview_cef_plugin.h>
 
 struct _MyApplication {
   GtkApplication parent_instance;
@@ -17,6 +23,13 @@ G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
+  
+  GList* windows = gtk_application_get_windows(GTK_APPLICATION(application));
+  if (windows) {
+    gtk_window_present(GTK_WINDOW(windows->data));
+    return;
+  }
+
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
 
@@ -40,11 +53,11 @@ static void my_application_activate(GApplication* application) {
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, "flutter_client");
+    gtk_header_bar_set_title(header_bar, "lsfusion_client");
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
   } else {
-    gtk_window_set_title(window, "flutter_client");
+    gtk_window_set_title(window, "lsfusion_client");
   }
 
   gtk_window_set_default_size(window, 1280, 720);
@@ -54,6 +67,8 @@ static void my_application_activate(GApplication* application) {
   fl_dart_project_set_dart_entrypoint_arguments(project, self->dart_entrypoint_arguments);
 
   FlView* view = fl_view_new(project);
+  g_signal_connect(view, "key_press_event", G_CALLBACK(processKeyEventForCEF), nullptr);
+  g_signal_connect(view, "key_release_event", G_CALLBACK(processKeyEventForCEF), nullptr);
   gtk_widget_show(GTK_WIDGET(view));
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
 
@@ -125,6 +140,6 @@ MyApplication* my_application_new() {
 
   return MY_APPLICATION(g_object_new(my_application_get_type(),
                                      "application-id", APPLICATION_ID,
-                                     "flags", G_APPLICATION_NON_UNIQUE,
+                                     "flags", G_APPLICATION_DEFAULT_FLAGS,
                                      nullptr));
 }

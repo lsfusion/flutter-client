@@ -1,0 +1,26 @@
+display_name: lsFusion client
+package_name: lsfusion-client
+executable_name: lsfusion_client
+summary: lsFusion client
+icon: web/icons/Icon-192.png
+maintainer:
+  name: lsFusion
+  email: support@lsfusion.org
+licenses:
+  - MIT
+categories:
+  - Office
+  - Utility
+dependencies:
+  - gtk3
+  - libayatana-appindicator
+  - xz
+  - nss
+  - nspr
+  - alsa-lib
+  - glu
+  - libx11
+  - webkit2gtk-4.1
+startup_notify: false
+package_release: '1'
+terminal: false

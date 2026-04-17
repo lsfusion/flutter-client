@@ -1,6 +1,6 @@
-# Flutter Client
+# lsFusion Client
 
-Cross-platform lsFusion flutter client.
+Cross-platform lsFusion client.
 
 ## How to run
 

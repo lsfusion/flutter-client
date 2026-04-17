@@ -1,6 +1,6 @@
 {
-    "name": "flutter_client",
-    "short_name": "flutter_client",
+    "name": "lsfusion_client",
+    "short_name": "lsfusion_client",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

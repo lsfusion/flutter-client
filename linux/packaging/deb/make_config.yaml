@@ -1,0 +1,17 @@
+display_name: lsFusion client
+package_name: lsfusion-client
+icon: web/icons/Icon-192.png
+maintainer:
+  name: lsFusion
+  email: support@lsfusion.org
+installed_size: 25000
+priority: optional
+section: utils
+categories:
+  - Office
+  - Utility
+dependencies:
+  - libgtk-3-0
+  - libappindicator3-1
+  - liblzma5
+  - libwebkit2gtk-4.1-0

@@ -8,7 +8,101 @@ on:
   workflow_call:
 
 jobs:
-  dummy:
+  build-macos:
+    name: Build macOS
     runs-on: macos-latest
     steps:
-      - run: echo "Placeholder workflow"
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        
+      - name: Install system dependencies
+        run: |
+          brew update
+          brew install automake libtool
+
+      - name: Setup Flutter
+        uses: flutter-actions/setup-flutter@v4
+        with:
+          channel: stable
+          version: latest
+
+      - name: Install dependencies
+        run: flutter pub get
+        
+      - name: Build macOS build
+        run: flutter build macos --release
+        
+      - name: Install create-dmg
+        run: brew install create-dmg  
+        
+      - name: Create beautiful DMG
+        run: |
+          APP_PATH="build/macos/Build/Products/Release/lsfusion_client.app"
+          DMG_PATH="build/macos/Build/Products/Release/lsfusion_client-macos.dmg"
+
+          create-dmg \
+            --volname "lsfusion_client" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "lsfusion_client.app" 200 190 \
+            --app-drop-link 600 185 \
+            --no-internet-enable \
+            "$DMG_PATH" \
+            "$APP_PATH"
+
+      - name: Prepare and rename artifacts
+        run: |
+          mkdir deploy_out
+          cp build/macos/Build/Products/Release/lsfusion_client-macos.dmg deploy_out/
+
+      - name: Upload to CDN via FTP
+        uses: sand4rt/ftp-deployer@v1.8
+        with:
+          host: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USERNAME }}
+          password: ${{ secrets.SFTP_PASSWORD }}
+          port: 21
+          local_folder: deploy_out/
+          remote_folder: flutter/macos/
+          cleanup: false
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v6
+        with:
+          name: lsfusion_client-macos
+          path: build/macos/Build/Products/Release/lsfusion_client-macos.dmg  
+        
+        
+#      - name: Create DMG
+#        run: |
+#          cd build/macos/Build/Products/Release
+#
+#          mkdir dmg
+#          cp -r lsfusion_client.app dmg/
+#
+#          hdiutil create \
+#            -volname "lsfusion_client" \
+#            -srcfolder dmg \
+#            -ov \
+#            -format UDZO \
+#            lsfusion_client-macos.dmg
+#
+#      - name: Upload DMG
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: lsfusion_client-macos
+#          path: build/macos/Build/Products/Release/lsfusion_client-macos.dmg
+          
+          
+        
+#      - name: Zip macOS build
+#        run: |
+#          cd build/macos/Build/Products/Release
+#          zip -r lsfusion_client-macos.zip lsfusion_client.app
+#
+#      - name: Upload macOS build
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: macos-build
+#          path: build/macos/Build/Products/Release/lsfusion_client-macos.zip

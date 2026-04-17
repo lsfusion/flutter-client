@@ -1,0 +1,19 @@
+display_name: lsFusion client
+icon: web/icons/Icon-192.png
+summary: lsFusion client
+license: MIT
+vendor: lsFusion
+group: Applications/Productivity
+categories:
+  - Office
+  - Utility
+requires:
+  - gtk3
+  - libappindicator-gtk3
+  - xz-libs
+  - libstdc++
+  - mesa-libGLU
+  - libX11
+  - nss
+  - nspr
+  - alsa-lib
