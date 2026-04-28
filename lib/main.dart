@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart' as flutter;
 import 'package:webview_windows/webview_windows.dart' as wv;
@@ -176,6 +177,55 @@ class _WebViewPageState extends State<WebViewPage> {
     }
   }
 
+  // Workaround for scrolling issue in webview_windows package 
+  // https://github.com/jnschulze/flutter-webview-windows/issues/28#issuecomment-1765925438
+  // may be fixed when newer version (> ) is out
+  Future<void> _scrollWebview(double mouseX, double mouseY, double dx, double dy) {
+    return _windowsWebViewController!.executeScript("""
+      (function() {
+        function findScrollable(el) {
+          while (el && el !== document.body && el !== document.documentElement) {
+            var style = window.getComputedStyle(el);
+            var overflowY = style.overflowY;
+            var overflowX = style.overflowX;
+            if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight) return el;
+            if ((overflowX === 'auto' || overflowX === 'scroll') && el.scrollWidth > el.clientWidth) return el;
+            el = el.parentElement;
+          }
+          return document.scrollingElement || document.documentElement;
+        }
+        var el = document.elementFromPoint($mouseX, $mouseY);
+        if (!el) el = document.documentElement;
+        var target = findScrollable(el);
+        target.scrollBy($dx, $dy);
+      })();
+    """);
+  }
+
+  Widget _buildWindowsWebView() {
+    return Listener(
+      onPointerSignal: (signal) {
+        if (signal is PointerScrollEvent) {
+          _scrollWebview(
+            signal.localPosition.dx,
+            signal.localPosition.dy,
+            signal.scrollDelta.dx,
+            signal.scrollDelta.dy,
+          );
+        }
+      },
+      onPointerPanZoomUpdate: (event) {
+        _scrollWebview(
+          event.localPosition.dx,
+          event.localPosition.dy,
+          -event.panDelta.dx,
+          -event.panDelta.dy,
+        );
+      },
+      child: wv.Webview(_windowsWebViewController!),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_isReady) {
@@ -228,7 +278,7 @@ class _WebViewPageState extends State<WebViewPage> {
             Expanded(
               child: isWindows
                   ? (_windowsControllerReady && _windowsWebViewController != null
-                      ? wv.Webview(_windowsWebViewController!)
+                      ? _buildWindowsWebView()
                       : const Center(child: CircularProgressIndicator()))
                   : (isLinux
                       ? (_cefHelper != null && _cefHelper!.isReady
