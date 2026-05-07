@@ -322,22 +322,24 @@ class _WebViewPageState extends State<WebViewPage> {
                 : const Center(child: CircularProgressIndicator())));
 
     return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(child: webViewContent),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (!isMobile) _buildDesktopTriggerZone(),
-                _buildAddressBarArea(),
-              ],
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Positioned.fill(child: webViewContent),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!isMobile) _buildDesktopTriggerZone(),
+                  _buildAddressBarArea(),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
