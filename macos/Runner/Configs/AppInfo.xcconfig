@@ -11,4 +11,4 @@ PRODUCT_NAME = lsfusion_client
 PRODUCT_BUNDLE_IDENTIFIER = org.lsfusion.lsfusionClient
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2025 com.example. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 lsFusion Foundation. All rights reserved.
