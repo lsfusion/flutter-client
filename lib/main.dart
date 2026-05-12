@@ -42,11 +42,12 @@ class _WebViewPageState extends State<WebViewPage> {
   CefWebViewHelper? _cefHelper;
   bool _windowsControllerReady = false;
 
-  bool _showAddressBar = false;
+  bool _showAddressBar = true;
   bool _isLoading = false;
   bool _isReady = false;
   bool _isMouseInAddressBar = false;
   bool _isAddressBarFocused = false;
+  bool _hasLoadError = false;
 
   String _currentUrl = 'http://127.0.0.1:8080/main';
 
@@ -59,7 +60,7 @@ class _WebViewPageState extends State<WebViewPage> {
   }
 
   void _checkHideAddressBar() {
-    if (!_isMouseInAddressBar && !_isAddressBarFocused) {
+    if (!_isMouseInAddressBar && !_isAddressBarFocused && !_isLoading) {
       setState(() => _showAddressBar = false);
     }
   }
@@ -114,11 +115,22 @@ class _WebViewPageState extends State<WebViewPage> {
       )
       ..setNavigationDelegate(flutter.NavigationDelegate(
         onPageStarted: (_) {
-          setState(() => _isLoading = true);
+          setState(() {
+            _isLoading = true;
+            _hasLoadError = false;
+          });
         },
         onPageFinished: (_) {
           setState(() => _isLoading = false);
           _injectSwipeDetector();
+          if (!_hasLoadError) {
+            _checkHideAddressBar();
+          }
+        },
+        onWebResourceError: (error) {
+          if (error.isForMainFrame ?? false) {
+            setState(() => _hasLoadError = true);
+          }
         },
       ))
       ..loadRequest(Uri.parse(_currentUrl));
@@ -185,6 +197,9 @@ class _WebViewPageState extends State<WebViewPage> {
       setState(() {
         _isLoading = state == wv.LoadingState.loading;
       });
+      if (state == wv.LoadingState.navigationCompleted) {
+        _checkHideAddressBar();
+      }
     });
     await _windowsWebViewController!.loadUrl(_currentUrl);
     setState(() {
@@ -197,7 +212,10 @@ class _WebViewPageState extends State<WebViewPage> {
     await _cefHelper!.initialize(
       _currentUrl,
       onLoadStart: () => setState(() => _isLoading = true),
-      onLoadEnd: () => setState(() => _isLoading = false),
+      onLoadEnd: () {
+        setState(() => _isLoading = false);
+        _checkHideAddressBar();
+      },
       onMessage: (message) => execute(message),
     );
     setState(() {});
@@ -353,14 +371,14 @@ class _WebViewPageState extends State<WebViewPage> {
       },
       child: Container(
         height: 4,
-        color: Colors.white.withAlpha((255.0 * 0.3).round()),
+        color: Colors.transparent,
       ),
     );
   }
 
   Widget _buildAddressBarArea() {
     final addressBar = Container(
-      color: Theme.of(context).scaffoldBackgroundColor.withAlpha((255.0 * 0.9).round()),
+      color: Theme.of(context).scaffoldBackgroundColor,
       padding: const EdgeInsets.all(8.0),
       child: AddressBar(
         initialUrl: _currentUrl,
@@ -368,6 +386,8 @@ class _WebViewPageState extends State<WebViewPage> {
         onNavigate: (url) {
           setState(() {
             _currentUrl = url;
+            _showAddressBar = true;
+            _isLoading = true;
           });
           if (isWindows) {
             _windowsWebViewController?.loadUrl(url);
