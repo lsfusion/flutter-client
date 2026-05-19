@@ -61,7 +61,7 @@ dev_dependencies:
   fastforge: ^0.6.6
 
 msix_config:
-  display_name: lsFusion Client
+  display_name: lsFusion
   publisher_display_name: lsFusion
   publisher: CN=Aliaksei Kirkouski, O=Aliaksei Kirkouski, L=Warsaw, S=Masovian Voivodeship, C=PL
   identity_name: com.lsfusion.client

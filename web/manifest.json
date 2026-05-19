@@ -1,6 +1,6 @@
 {
-    "name": "lsfusion_client",
-    "short_name": "lsfusion_client",
+    "name": "lsFusion",
+    "short_name": "lsFusion",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

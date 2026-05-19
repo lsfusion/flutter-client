@@ -1,7 +1,7 @@
-display_name: lsFusion client
+display_name: lsFusion
 package_name: lsfusion-client
 executable_name: lsfusion_client
-summary: lsFusion client
+summary: lsFusion
 icon: web/icons/Icon-192.png
 maintainer:
   name: lsFusion
