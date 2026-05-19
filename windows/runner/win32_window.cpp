@@ -213,6 +213,17 @@ Win32Window::MessageHandler(HWND hwnd,
       }
       return 0;
 
+    case WM_NCACTIVATE: {
+      // WebView2 hosts its content in a child HWND. When focus moves into the
+      // web content, Windows sends WM_NCACTIVATE(FALSE) to this top-level
+      // window even though our app is still in the foreground, which makes the
+      // title bar flicker to the inactive style. Decide the active state from
+      // the foreground window's ownership instead of trusting wparam.
+      HWND foreground = GetForegroundWindow();
+      BOOL active = (foreground == hwnd || IsChild(hwnd, foreground)) ? TRUE : FALSE;
+      return DefWindowProc(hwnd, message, active, lparam);
+    }
+
     case WM_DWMCOLORIZATIONCOLORCHANGED:
       UpdateTheme(hwnd);
       return 0;
