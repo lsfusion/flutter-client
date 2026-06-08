@@ -144,8 +144,6 @@ class _WebViewPageState extends State<WebViewPage> {
       ]),
       initialSettings: InAppWebViewSettings(
         javaScriptEnabled: true,
-        transparentBackground: true,
-        supportZoom: false,
       ),
       onWebViewCreated: _onWebViewCreated,
       onLoadStart: (controller, url) {
@@ -155,6 +153,17 @@ class _WebViewPageState extends State<WebViewPage> {
         });
       },
       onLoadStop: (controller, url) {
+        // lsFusion renders context menus / popups inside Tippy.js boxes whose
+        // `.tippy-content` wrapper is `pointer-events: none`. In a normal
+        // browser the interactive Tippy instance re-enables pointer events, but
+        // under the WebView2 backend that does not take effect, so clicks fall
+        // through the menu to the grid cell behind it. Force pointer events back
+        // on for GWT popups/menus so their items stay clickable.
+        controller.injectCSSCode(source: '''
+          .gwt-PopupPanel, .gwt-PopupPanel *,
+          .gwt-MenuBar, .gwt-MenuBar *,
+          .context-menu-item, .context-menu-item * { pointer-events: auto !important; }
+        ''');
         setState(() => _isLoading = false);
         _injectSwipeDetector();
         if (!_hasLoadError) {
