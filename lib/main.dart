@@ -1,9 +1,8 @@
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart' as flutter;
-import 'package:webview_windows/webview_windows.dart' as wv;
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'cef_webview_stub.dart'
@@ -37,10 +36,8 @@ class WebViewPage extends StatefulWidget {
 }
 
 class _WebViewPageState extends State<WebViewPage> {
-  flutter.WebViewController? _flutterWebViewController;
-  wv.WebviewController? _windowsWebViewController;
+  InAppWebViewController? _inAppController;
   CefWebViewHelper? _cefHelper;
-  bool _windowsControllerReady = false;
 
   bool _showAddressBar = true;
   bool _isLoading = false;
@@ -51,9 +48,33 @@ class _WebViewPageState extends State<WebViewPage> {
 
   String _currentUrl = 'http://127.0.0.1:8080/main';
 
-  bool get isWindows => Platform.isWindows;
   bool get isLinux => Platform.isLinux;
   bool get isMobile => Platform.isAndroid || Platform.isIOS;
+
+  // Compatibility shim injected before any page script runs. The lsFusion web
+  // client talks to the host through `Flutter.postMessage`,
+  // `FlutterAddressBar.postMessage` and `window.chrome.webview.postMessage`
+  // (the APIs exposed by the previous webview_flutter / webview_windows
+  // backends). flutter_inappwebview instead exposes
+  // `window.flutter_inappwebview.callHandler(name, ...)`, so we recreate the
+  // old global names and route them to the new bridge. This keeps the
+  // server-side web client working unchanged.
+  static const String _bridgeShim = '''
+    (function() {
+      if (window.__lsfBridgeInstalled) return;
+      window.__lsfBridgeInstalled = true;
+      function call(name, msg) {
+        try { window.flutter_inappwebview.callHandler(name, msg); } catch (e) {}
+      }
+      window.Flutter = { postMessage: function(m) { call('Flutter', m); } };
+      window.FlutterAddressBar = { postMessage: function(m) { call('FlutterAddressBar', m); } };
+      window.chrome = window.chrome || {};
+      if (!window.chrome.webview || typeof window.chrome.webview.postMessage !== 'function') {
+        window.chrome.webview = window.chrome.webview || {};
+        window.chrome.webview.postMessage = function(m) { call('Flutter', m); };
+      }
+    })();
+  ''';
 
   void _setAddressBarVisible(bool visible) {
     setState(() => _showAddressBar = visible);
@@ -69,9 +90,7 @@ class _WebViewPageState extends State<WebViewPage> {
   void initState() {
     super.initState();
     _loadLastUrl();
-    if (isWindows) {
-      _initWindowsWebView();
-    } else if (isLinux) {
+    if (isLinux) {
       _initCefWebView();
     }
   }
@@ -83,62 +102,76 @@ class _WebViewPageState extends State<WebViewPage> {
       _currentUrl = history.last;
     }
 
-    if (!isWindows && !isLinux) {
-      _initFlutterWebView();
-    }
-
     setState(() {
       _isReady = true;
     });
   }
 
-  void _initFlutterWebView() {
-    _flutterWebViewController = flutter.WebViewController()
-      ..setJavaScriptMode(flutter.JavaScriptMode.unrestricted)
-      ..addJavaScriptChannel(
-        'Flutter',
-        onMessageReceived: (flutter.JavaScriptMessage message) async {
-          _flutterWebViewController!.runJavaScript(
-            await execute(message.message),
-          );
-        },
-      )
-      ..addJavaScriptChannel(
-        'FlutterAddressBar',
-        onMessageReceived: (flutter.JavaScriptMessage message) {
-          if (message.message == 'show') {
-            _setAddressBarVisible(true);
-          } else if (message.message == 'hide') {
-            _setAddressBarVisible(false);
-          }
-        },
-      )
-      ..setNavigationDelegate(flutter.NavigationDelegate(
-        onPageStarted: (_) {
-          setState(() {
-            _isLoading = true;
-            _hasLoadError = false;
-          });
-        },
-        onPageFinished: (_) {
-          setState(() => _isLoading = false);
-          _injectSwipeDetector();
-          if (!_hasLoadError) {
-            _checkHideAddressBar();
-          }
-        },
-        onWebResourceError: (error) {
-          if (error.isForMainFrame ?? false) {
-            setState(() => _hasLoadError = true);
-          }
-        },
-      ))
-      ..loadRequest(Uri.parse(_currentUrl));
+  void _onWebViewCreated(InAppWebViewController controller) {
+    _inAppController = controller;
+
+    controller.addJavaScriptHandler(
+      handlerName: 'Flutter',
+      callback: (args) async {
+        final message = args.isNotEmpty ? args[0] as String : '';
+        await controller.evaluateJavascript(source: await execute(message));
+        return null;
+      },
+    );
+
+    controller.addJavaScriptHandler(
+      handlerName: 'FlutterAddressBar',
+      callback: (args) {
+        final message = args.isNotEmpty ? args[0] as String : '';
+        if (message == 'show') {
+          _setAddressBarVisible(true);
+        } else if (message == 'hide') {
+          _setAddressBarVisible(false);
+        }
+        return null;
+      },
+    );
+  }
+
+  Widget _buildInAppWebView() {
+    return InAppWebView(
+      initialUrlRequest: URLRequest(url: WebUri(_currentUrl)),
+      initialUserScripts: UnmodifiableListView<UserScript>([
+        UserScript(
+          source: _bridgeShim,
+          injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+        ),
+      ]),
+      initialSettings: InAppWebViewSettings(
+        javaScriptEnabled: true,
+        transparentBackground: true,
+        supportZoom: false,
+      ),
+      onWebViewCreated: _onWebViewCreated,
+      onLoadStart: (controller, url) {
+        setState(() {
+          _isLoading = true;
+          _hasLoadError = false;
+        });
+      },
+      onLoadStop: (controller, url) {
+        setState(() => _isLoading = false);
+        _injectSwipeDetector();
+        if (!_hasLoadError) {
+          _checkHideAddressBar();
+        }
+      },
+      onReceivedError: (controller, request, error) {
+        if (request.isForMainFrame ?? false) {
+          setState(() => _hasLoadError = true);
+        }
+      },
+    );
   }
 
   void _injectSwipeDetector() {
     // detects swipe only on non-scrollable elements to show/hide address bar
-    _flutterWebViewController?.runJavaScript('''
+    _inAppController?.evaluateJavascript(source: '''
       (function() {
         if (window.__swipeDetectorInstalled) return;
         window.__swipeDetectorInstalled = true;
@@ -185,26 +218,6 @@ class _WebViewPageState extends State<WebViewPage> {
         }, { passive: true });
       })();
     ''');
-  }
-
-  void _initWindowsWebView() async {
-    _windowsWebViewController = wv.WebviewController();
-    await _windowsWebViewController!.initialize();
-    _windowsWebViewController!.webMessage.listen((message) async {
-      _windowsWebViewController!.executeScript(await execute(message));
-    });
-    _windowsWebViewController!.loadingState.listen((state) {
-      setState(() {
-        _isLoading = state == wv.LoadingState.loading;
-      });
-      if (state == wv.LoadingState.navigationCompleted) {
-        _checkHideAddressBar();
-      }
-    });
-    await _windowsWebViewController!.loadUrl(_currentUrl);
-    setState(() {
-      _windowsControllerReady = true;
-    });
   }
 
   void _initCefWebView() async {
@@ -270,55 +283,6 @@ class _WebViewPageState extends State<WebViewPage> {
     }
   }
 
-  // Workaround for scrolling issue in webview_windows package 
-  // https://github.com/jnschulze/flutter-webview-windows/issues/28#issuecomment-1765925438
-  // may be fixed when newer version (> ) is out
-  Future<void> _scrollWebview(double mouseX, double mouseY, double dx, double dy) {
-    return _windowsWebViewController!.executeScript("""
-      (function() {
-        function findScrollable(el) {
-          while (el && el !== document.body && el !== document.documentElement) {
-            var style = window.getComputedStyle(el);
-            var overflowY = style.overflowY;
-            var overflowX = style.overflowX;
-            if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight) return el;
-            if ((overflowX === 'auto' || overflowX === 'scroll') && el.scrollWidth > el.clientWidth) return el;
-            el = el.parentElement;
-          }
-          return document.scrollingElement || document.documentElement;
-        }
-        var el = document.elementFromPoint($mouseX, $mouseY);
-        if (!el) el = document.documentElement;
-        var target = findScrollable(el);
-        target.scrollBy($dx, $dy);
-      })();
-    """);
-  }
-
-  Widget _buildWindowsWebView() {
-    return Listener(
-      onPointerSignal: (signal) {
-        if (signal is PointerScrollEvent) {
-          _scrollWebview(
-            signal.localPosition.dx,
-            signal.localPosition.dy,
-            signal.scrollDelta.dx,
-            signal.scrollDelta.dy,
-          );
-        }
-      },
-      onPointerPanZoomUpdate: (event) {
-        _scrollWebview(
-          event.localPosition.dx,
-          event.localPosition.dy,
-          -event.panDelta.dx,
-          -event.panDelta.dy,
-        );
-      },
-      child: wv.Webview(_windowsWebViewController!),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (!_isReady) {
@@ -327,17 +291,11 @@ class _WebViewPageState extends State<WebViewPage> {
       );
     }
 
-    final webViewContent = isWindows
-        ? (_windowsControllerReady && _windowsWebViewController != null
-            ? _buildWindowsWebView()
+    final webViewContent = isLinux
+        ? (_cefHelper != null && _cefHelper!.isReady
+            ? _cefHelper!.buildWebView()
             : const Center(child: CircularProgressIndicator()))
-        : (isLinux
-            ? (_cefHelper != null && _cefHelper!.isReady
-                ? _cefHelper!.buildWebView()
-                : const Center(child: CircularProgressIndicator()))
-            : (_flutterWebViewController != null
-                ? flutter.WebViewWidget(controller: _flutterWebViewController!)
-                : const Center(child: CircularProgressIndicator())));
+        : _buildInAppWebView();
 
     return Scaffold(
       body: SafeArea(
@@ -389,12 +347,10 @@ class _WebViewPageState extends State<WebViewPage> {
             _showAddressBar = true;
             _isLoading = true;
           });
-          if (isWindows) {
-            _windowsWebViewController?.loadUrl(url);
-          } else if (isLinux) {
+          if (isLinux) {
             _cefHelper?.loadUrl(url);
           } else {
-            _flutterWebViewController?.loadRequest(Uri.parse(url));
+            _inAppController?.loadUrl(urlRequest: URLRequest(url: WebUri(url)));
           }
         },
       ),

@@ -6,18 +6,18 @@
 
 #include "generated_plugin_registrant.h"
 
+#include <flutter_inappwebview_windows/flutter_inappwebview_windows_plugin_c_api.h>
 #include <flutter_libserialport/flutter_libserialport_plugin.h>
 #include <printing/printing_plugin.h>
 #include <webview_cef/webview_cef_plugin_c_api.h>
-#include <webview_windows/webview_windows_plugin.h>
 
 void RegisterPlugins(flutter::PluginRegistry* registry) {
+  FlutterInappwebviewWindowsPluginCApiRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("FlutterInappwebviewWindowsPluginCApi"));
   FlutterLibserialportPluginRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("FlutterLibserialportPlugin"));
   PrintingPluginRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("PrintingPlugin"));
   WebviewCefPluginCApiRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("WebviewCefPluginCApi"));
-  WebviewWindowsPluginRegisterWithRegistrar(
-      registry->GetRegistrarForPlugin("WebviewWindowsPlugin"));
 }
