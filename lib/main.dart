@@ -76,6 +76,26 @@ class _WebViewPageState extends State<WebViewPage> {
     })();
   ''';
 
+  // The flutter_inappwebview Windows backend hosts WebView2 via a composition
+  // controller with a hidden HWND. Because of that, every click first lets the
+  // Flutter window steal focus (firing `blur`/`focusout`) and then WebView2
+  // takes focus back (firing `focus`/`focusin`). lsFusion hides tooltips/menus
+  // on `focusout`, so they vanish on the very first click. A genuine in-page
+  // focus change keeps the document focused, whereas this artifact fires while
+  // the document has lost focus — so swallow focus-out events that happen while
+  // `document.hasFocus()` is false. See WebView2Feedback#4944.
+  static const String _focusArtifactGuard = '''
+    (function() {
+      ['focusout', 'blur'].forEach(function(type) {
+        document.addEventListener(type, function(e) {
+          if (!document.hasFocus()) {
+            e.stopImmediatePropagation();
+          }
+        }, true);
+      });
+    })();
+  ''';
+
   void _setAddressBarVisible(bool visible) {
     setState(() => _showAddressBar = visible);
   }
@@ -141,6 +161,10 @@ class _WebViewPageState extends State<WebViewPage> {
           source: _bridgeShim,
           injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
         ),
+        UserScript(
+          source: _focusArtifactGuard,
+          injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+        ),
       ]),
       initialSettings: InAppWebViewSettings(
         javaScriptEnabled: true,
@@ -153,16 +177,20 @@ class _WebViewPageState extends State<WebViewPage> {
         });
       },
       onLoadStop: (controller, url) {
-        // lsFusion renders context menus / popups inside Tippy.js boxes whose
-        // `.tippy-content` wrapper is `pointer-events: none`. In a normal
-        // browser the interactive Tippy instance re-enables pointer events, but
-        // under the WebView2 backend that does not take effect, so clicks fall
-        // through the menu to the grid cell behind it. Force pointer events back
-        // on for GWT popups/menus so their items stay clickable.
+        // lsFusion renders context menus, tooltips and other popups inside
+        // Tippy.js boxes whose `.tippy-box`/`.tippy-content` is
+        // `pointer-events: none`. In a normal browser the interactive Tippy
+        // instance re-enables pointer events, but under the WebView2 backend
+        // that does not take effect: clicks fall through the popup to whatever
+        // is behind it, so menu items do nothing and tooltips dismiss on click.
+        // Force pointer events back on for Tippy popups (and GWT popups/menus)
+        // so they stay clickable.
         controller.injectCSSCode(source: '''
+          [data-tippy-root], [data-tippy-root] *,
+          .tippy-box, .tippy-box *,
+          .tippy-content, .tippy-content *,
           .gwt-PopupPanel, .gwt-PopupPanel *,
-          .gwt-MenuBar, .gwt-MenuBar *,
-          .context-menu-item, .context-menu-item * { pointer-events: auto !important; }
+          .gwt-MenuBar, .gwt-MenuBar * { pointer-events: auto !important; }
         ''');
         setState(() => _isLoading = false);
         _injectSwipeDetector();
