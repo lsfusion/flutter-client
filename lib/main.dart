@@ -10,6 +10,7 @@ import 'cef_webview_stub.dart'
 
 import 'address_bar.dart';
 import 'native.dart';
+import 'windows_custom_cursor.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,6 +51,16 @@ class _WebViewPageState extends State<WebViewPage> {
 
   bool get isLinux => Platform.isLinux;
   bool get isMobile => Platform.isAndroid || Platform.isIOS;
+
+  // Applied by the overlay MouseRegion in build(); the custom glyphs are
+  // registered asynchronously in initState, system double arrows until then.
+  // See _cursorOverrideReporter and windows_custom_cursor.dart.
+  final ValueNotifier<MouseCursor> _cursorOverride =
+      ValueNotifier(MouseCursor.defer);
+  MouseCursor _colResizeCursor = SystemMouseCursors.resizeColumn;
+  MouseCursor _rowResizeCursor = SystemMouseCursors.resizeRow;
+  MouseCursor _colResizeCursorDark = SystemMouseCursors.resizeColumn;
+  MouseCursor _rowResizeCursorDark = SystemMouseCursors.resizeRow;
 
   // Compatibility shim injected before any page script runs. The lsFusion web
   // client talks to the host through `Flutter.postMessage`,
@@ -96,6 +107,53 @@ class _WebViewPageState extends State<WebViewPage> {
     })();
   ''';
 
+  // The composition-mode plugin can't map Chromium's col-resize/row-resize
+  // cursors to Flutter ones (no system equivalents exist), leaving a plain
+  // arrow over lsFusion's splitters and grid column handles — see
+  // windows_custom_cursor.dart. This script reports those CSS cursor values
+  // to the host, which applies custom glyphs via the overlay MouseRegion in
+  // build(). The '/dark' suffix (lsFusion mirrors its color theme into
+  // data-bs-theme on <html>; absent before login = light) selects the white
+  // variant.
+  static const String _cursorOverrideReporter = '''
+    (function() {
+      if (window.__lsfCursorReporterInstalled) return;
+      window.__lsfCursorReporterInstalled = true;
+      var last = '';
+      function report(v) {
+        if (v !== last) {
+          last = v;
+          try { window.flutter_inappwebview.callHandler('cursorOverride', v); } catch (e) {}
+        }
+      }
+      document.addEventListener('mousemove', function(e) {
+        var c = '';
+        try { c = getComputedStyle(e.target).cursor; } catch (e2) {}
+        if (c === 'col-resize' || c === 'row-resize') {
+          var dark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+          report(c + (dark ? '/dark' : ''));
+        } else {
+          report('');
+        }
+      }, true);
+      document.addEventListener('mouseleave', function() { report(''); });
+    })();
+  ''';
+
+  Future<void> _initCustomCursors() async {
+    final scale = WidgetsBinding
+            .instance.platformDispatcher.implicitView?.devicePixelRatio ??
+        1.0;
+    _colResizeCursor = await registerResizeCursor('lsf-col-resize',
+        vertical: false, forDarkBackground: false, scale: scale);
+    _rowResizeCursor = await registerResizeCursor('lsf-row-resize',
+        vertical: true, forDarkBackground: false, scale: scale);
+    _colResizeCursorDark = await registerResizeCursor('lsf-col-resize-dark',
+        vertical: false, forDarkBackground: true, scale: scale);
+    _rowResizeCursorDark = await registerResizeCursor('lsf-row-resize-dark',
+        vertical: true, forDarkBackground: true, scale: scale);
+  }
+
   void _setAddressBarVisible(bool visible) {
     setState(() => _showAddressBar = visible);
   }
@@ -112,6 +170,9 @@ class _WebViewPageState extends State<WebViewPage> {
     _loadLastUrl();
     if (isLinux) {
       _initCefWebView();
+    }
+    if (Platform.isWindows) {
+      _initCustomCursors();
     }
   }
 
@@ -139,6 +200,23 @@ class _WebViewPageState extends State<WebViewPage> {
       },
     );
 
+    if (Platform.isWindows) {
+      controller.addJavaScriptHandler(
+        handlerName: 'cursorOverride',
+        callback: (args) {
+          final value = args.isNotEmpty ? args[0] as String : '';
+          final dark = value.endsWith('/dark');
+          final cursor = dark ? value.substring(0, value.length - 5) : value;
+          _cursorOverride.value = switch (cursor) {
+            'col-resize' => dark ? _colResizeCursorDark : _colResizeCursor,
+            'row-resize' => dark ? _rowResizeCursorDark : _rowResizeCursor,
+            _ => MouseCursor.defer,
+          };
+          return null;
+        },
+      );
+    }
+
     controller.addJavaScriptHandler(
       handlerName: 'FlutterAddressBar',
       callback: (args) {
@@ -165,6 +243,11 @@ class _WebViewPageState extends State<WebViewPage> {
           source: _focusArtifactGuard,
           injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
         ),
+        if (Platform.isWindows)
+          UserScript(
+            source: _cursorOverrideReporter,
+            injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+          ),
       ]),
       initialSettings: InAppWebViewSettings(
         javaScriptEnabled: true,
@@ -339,6 +422,18 @@ class _WebViewPageState extends State<WebViewPage> {
         child: Stack(
           children: [
             Positioned.fill(child: webViewContent),
+            // Applies the cursors reported by _cursorOverrideReporter.
+            // opaque: false keeps it transparent to pointer events; being in
+            // front of the webview, a non-defer cursor here wins over the
+            // plugin's own MouseRegion.
+            if (Platform.isWindows)
+              Positioned.fill(
+                child: ValueListenableBuilder<MouseCursor>(
+                  valueListenable: _cursorOverride,
+                  builder: (context, cursor, _) =>
+                      MouseRegion(cursor: cursor, opaque: false),
+                ),
+              ),
             Positioned(
               top: 0,
               left: 0,
