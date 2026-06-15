@@ -12,9 +12,13 @@ jobs:
     name: Build DEB
     runs-on: ubuntu-latest
     container:
-      # 22.04 ships WPE WebKit (libwpewebkit-1.0-dev) required by
-      # flutter_inappwebview_linux. 20.04 only has an older WPE that the
-      # plugin may not compile against.
+      # 22.04 is the only Ubuntu that still ships the WPE WebKit stack
+      # (libwpewebkit-1.0-dev etc.) that flutter_inappwebview_linux needs.
+      # 20.04's WPE is too old; 24.04 (noble) removed WPE WebKit entirely.
+      # The catch: jammy ships CMake 3.22, whose ExternalProject URL handling
+      # trips on the plugin's nlohmann/json FetchContent ("At least one entry
+      # of URL is a path"); that bug is fixed in CMake 3.27+. So we keep jammy
+      # for WPE and pull a newer CMake from pip (see "Upgrade CMake").
       image: ubuntu:22.04
     steps:
       - name: Install core tools
@@ -34,6 +38,7 @@ jobs:
             cmake \
             ninja-build \
             pkg-config \
+            python3-pip \
             libgtk-3-dev \
             liblzma-dev \
             libappindicator3-dev \
@@ -48,6 +53,13 @@ jobs:
             libwpe-1.0-dev \
             libsecret-1-dev \
             libwayland-dev
+
+      - name: Upgrade CMake (jammy ships 3.22; FetchContent needs >= 3.27)
+        run: |
+          # /usr/local/bin precedes /usr/bin on PATH, so the pip-installed
+          # cmake shadows the apt one. Pin below 4.x to avoid surprises.
+          pip3 install "cmake>=3.28,<4"
+          cmake --version
 
       - name: Install Flutter
         run: |
