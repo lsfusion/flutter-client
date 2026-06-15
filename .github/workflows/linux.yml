@@ -61,21 +61,27 @@ jobs:
           pip3 install "cmake>=3.28,<4"
           cmake --version
 
-      - name: Install clang 22 (plugin adds -Wno-deprecated-literal-operator)
+      - name: Install clang 22 and make it the default compiler
         run: |
           # flutter_inappwebview_linux unconditionally passes
           # -Wno-deprecated-literal-operator, which only clang >= 17 (or
           # GCC >= 11) understands; jammy's default clang is 14 and its repos
           # cap at clang-15, so -Werror turns the unknown flag into an error.
-          # Pull a modern clang from apt.llvm.org. We pin to the current stable
-          # (22) because apt.llvm.org retires old per-version suites; any
-          # clang >= 17 recognises the flag. The build is pointed at it via
-          # CC/CXX in the next step.
+          # Pull a modern clang from apt.llvm.org (pinned to current stable 22;
+          # apt.llvm.org retires old per-version suites and any clang >= 17
+          # recognises the flag). CC/CXX alone did NOT take (flutter/fastforge
+          # don't forward them to CMake's configure), so repoint the
+          # unversioned compiler names too -- then CMake picks clang 22 however
+          # it resolves the compiler (cc/c++/clang/clang++).
           apt-get install -y wget lsb-release software-properties-common gnupg
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           ./llvm.sh 22
-          clang-22 --version
+          ln -sf /usr/bin/clang-22 /usr/bin/clang
+          ln -sf /usr/bin/clang++-22 /usr/bin/clang++
+          ln -sf /usr/bin/clang-22 /usr/bin/cc
+          ln -sf /usr/bin/clang++-22 /usr/bin/c++
+          c++ --version
 
       - name: Install Flutter
         run: |
@@ -88,11 +94,7 @@ jobs:
 
       - name: Build DEB package
         run: |
-          # Force the modern clang for the whole build. CMake reads CC/CXX only
-          # on the first configure of a fresh build dir (the CI checkout has
-          # none yet), so this picks clang-22 for the runner and all plugins.
-          export CC=/usr/bin/clang-22
-          export CXX=/usr/bin/clang++-22
+          # Compiler is clang 22 via the symlinks set up above (cc/c++/clang).
           export PATH="$PATH:/opt/flutter/bin"
           /opt/flutter/bin/dart pub global activate fastforge
 
