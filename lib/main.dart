@@ -275,6 +275,15 @@ class _WebViewPageState extends State<WebViewPage> {
           .gwt-PopupPanel, .gwt-PopupPanel *,
           .gwt-MenuBar, .gwt-MenuBar * { pointer-events: auto !important; }
         ''');
+        // lsFusion sizes shrinkable elements with `max-height: -webkit-fill-available`
+        // (the `.intr-shrink-height` class). The Android System WebView mis-computes
+        // that inside a height-constrained `modal-fit-content` dialog, collapsing the
+        // form's action-button row to ~0px — so a tall dialog (e.g. "Design") shows no
+        // Save/Cancel buttons, while desktop Chrome renders them fine. Drop the cap on
+        // those elements inside modals so the buttons keep their natural height.
+        controller.injectCSSCode(source: '''
+          .modal-content .intr-shrink-height { max-height: none !important; }
+        ''');
         setState(() => _isLoading = false);
         _injectSwipeDetector();
         if (!_hasLoadError) {
