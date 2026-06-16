@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'cef_webview_stub.dart'
+    if (dart.library.io) 'cef_webview_impl.dart';
+
 import 'address_bar.dart';
 import 'native.dart';
 import 'windows_custom_cursor.dart';
@@ -35,6 +38,7 @@ class WebViewPage extends StatefulWidget {
 
 class _WebViewPageState extends State<WebViewPage> {
   InAppWebViewController? _inAppController;
+  CefWebViewHelper? _cefHelper;
 
   bool _showAddressBar = true;
   bool _isLoading = false;
@@ -45,6 +49,7 @@ class _WebViewPageState extends State<WebViewPage> {
 
   String _currentUrl = 'http://127.0.0.1:8080/main';
 
+  bool get isLinux => Platform.isLinux;
   bool get isMobile => Platform.isAndroid || Platform.isIOS;
 
   // Applied by the overlay MouseRegion in build(); the custom glyphs are
@@ -163,6 +168,9 @@ class _WebViewPageState extends State<WebViewPage> {
   void initState() {
     super.initState();
     _loadLastUrl();
+    if (isLinux) {
+      _initCefWebView();
+    }
     if (Platform.isWindows) {
       _initCustomCursors();
     }
@@ -332,6 +340,20 @@ class _WebViewPageState extends State<WebViewPage> {
     ''');
   }
 
+  void _initCefWebView() async {
+    _cefHelper = CefWebViewHelper();
+    await _cefHelper!.initialize(
+      _currentUrl,
+      onLoadStart: () => setState(() => _isLoading = true),
+      onLoadEnd: () {
+        setState(() => _isLoading = false);
+        _checkHideAddressBar();
+      },
+      onMessage: (message) => execute(message),
+    );
+    setState(() {});
+  }
+
   Future<String> execute(message) async {
     final data = jsonDecode(message);
     final cmd = data['command'];
@@ -389,7 +411,11 @@ class _WebViewPageState extends State<WebViewPage> {
       );
     }
 
-    final webViewContent = _buildInAppWebView();
+    final webViewContent = isLinux
+        ? (_cefHelper != null && _cefHelper!.isReady
+            ? _cefHelper!.buildWebView()
+            : const Center(child: CircularProgressIndicator()))
+        : _buildInAppWebView();
 
     return Scaffold(
       body: SafeArea(
@@ -453,7 +479,11 @@ class _WebViewPageState extends State<WebViewPage> {
             _showAddressBar = true;
             _isLoading = true;
           });
-          _inAppController?.loadUrl(urlRequest: URLRequest(url: WebUri(url)));
+          if (isLinux) {
+            _cefHelper?.loadUrl(url);
+          } else {
+            _inAppController?.loadUrl(urlRequest: URLRequest(url: WebUri(url)));
+          }
         },
       ),
     );

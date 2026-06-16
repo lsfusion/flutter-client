@@ -12,18 +12,20 @@ jobs:
     name: Build DEB
     runs-on: ubuntu-latest
     container:
-      # 22.04 ships WPE WebKit (libwpewebkit-1.0-dev) required by
-      # flutter_inappwebview_linux. 20.04 only has an older WPE that the
-      # plugin may not compile against.
-      image: ubuntu:22.04
+      image: ubuntu:20.04
     steps:
       - name: Install core tools
         run: |
           apt-get update
           apt-get install -y curl git tar xz-utils libglu1-mesa file
-
+          
       - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Fix webview_cef paths for DEB
+        run: |
+          ln -s runner/my_application.cc linux/my_application.cc
+          ln -s runner/main.cc linux/main.cc
 
       - name: Install Linux dependencies (Ubuntu)
         run: |
@@ -41,13 +43,7 @@ jobs:
             libnspr4-dev \
             libasound2-dev \
             xclip \
-            sudo \
-            libepoxy-dev \
-            libwpewebkit-1.0-dev \
-            libwpebackend-fdo-1.0-dev \
-            libwpe-1.0-dev \
-            libsecret-1-dev \
-            libwayland-dev
+            sudo
 
       - name: Install Flutter
         run: |
@@ -93,10 +89,6 @@ jobs:
 
   build-rpm:
     name: Build RPM
-    # Temporarily disabled: flutter_inappwebview_linux needs WPE WebKit, which
-    # AlmaLinux 8 does not package. Re-enable once a base image with WPE WebKit
-    # (newer EL/Fedora) and the matching -devel packages are sorted out.
-    if: false
     runs-on: ubuntu-latest
     container:
       image: almalinux:8
@@ -106,6 +98,11 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Fix webview_cef paths for RPM
+        run: |
+          ln -s runner/my_application.cc linux/my_application.cc
+          ln -s runner/main.cc linux/main.cc
 
       - name: Enable EPEL and PowerTools
         run: |
@@ -148,7 +145,7 @@ jobs:
           # We use both __requires_exclude and _use_internal_dependency_generator
           # Also we disable automatic requirements discovery to avoid finding internal .so
           cat <<EOF > $HOME/.rpmmacros
-          %__requires_exclude ^lib(flutter_.*|printing_plugin)\\.so.*
+          %__requires_exclude ^lib(flutter_.*|printing_plugin|webview_cef_plugin|cef)\\.so.*
           %_use_internal_dependency_generator 0
           %__find_requires /bin/true
           %__find_provides /bin/true
@@ -212,12 +209,7 @@ jobs:
             xclip \
             xz \
             zstd \
-            wpewebkit \
-            wpebackend-fdo \
-            libwpe \
-            libsecret \
-            wayland \
-            libepoxy \
+            webkit2gtk-4.1 \
             git \
             curl \
             tar \
@@ -226,6 +218,11 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Fix webview_cef paths for Arch
+        run: |
+          ln -s runner/my_application.cc linux/my_application.cc
+          ln -s runner/main.cc linux/main.cc
 
       - name: Install Flutter
         run: |
@@ -264,7 +261,7 @@ jobs:
           arch=('x86_64')
           url="https://lsfusion.org"
           license=('MIT')
-          depends=('gtk3' 'libayatana-appindicator' 'xz' 'nss' 'nspr' 'alsa-lib' 'glu' 'libx11' 'wpewebkit' 'wpebackend-fdo' 'libwpe' 'libsecret' 'wayland' 'libepoxy')
+          depends=('gtk3' 'libayatana-appindicator' 'xz' 'nss' 'nspr' 'alsa-lib' 'glu' 'libx11' 'webkit2gtk-4.1')
           options=('!strip')
           
           package() {

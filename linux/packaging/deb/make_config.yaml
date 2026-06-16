@@ -14,8 +14,4 @@ dependencies:
   - libgtk-3-0
   - libappindicator3-1
   - liblzma5
-  - libwpewebkit-1.0-3
-  - libwpebackend-fdo-1.0-1
-  - libwpe-1.0-1
-  - libsecret-1-0
-  - libepoxy0
+  - libwebkit2gtk-4.1-0
