@@ -61,22 +61,6 @@ jobs:
           pip3 install "cmake>=3.28,<4"
           cmake --version
 
-      - name: Install clang 22 (plugin adds -Wno-deprecated-literal-operator)
-        run: |
-          # flutter_inappwebview_linux unconditionally passes
-          # -Wno-deprecated-literal-operator, which only clang >= 17 (or
-          # GCC >= 11) understands; jammy's default clang is 14 and its repos
-          # cap at clang-15, so -Werror turns the unknown flag into an error.
-          # Pull a modern clang from apt.llvm.org. We pin to the current stable
-          # (22) because apt.llvm.org retires old per-version suites; any
-          # clang >= 17 recognises the flag. The build is pointed at it via
-          # CC/CXX in the next step.
-          apt-get install -y wget lsb-release software-properties-common gnupg
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          ./llvm.sh 22
-          clang-22 --version
-
       - name: Install Flutter
         run: |
           curl -o /tmp/flutter.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.41.4-stable.tar.xz
@@ -88,14 +72,9 @@ jobs:
 
       - name: Build DEB package
         run: |
-          # Force the modern clang for the whole build. CMake reads CC/CXX only
-          # on the first configure of a fresh build dir (the CI checkout has
-          # none yet), so this picks clang-22 for the runner and all plugins.
-          export CC=/usr/bin/clang-22
-          export CXX=/usr/bin/clang++-22
           export PATH="$PATH:/opt/flutter/bin"
           /opt/flutter/bin/dart pub global activate fastforge
-
+          
           /opt/flutter/bin/flutter pub get
           /opt/flutter/bin/dart pub global run fastforge:main package --platform linux --targets deb
 
