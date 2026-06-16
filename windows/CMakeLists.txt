@@ -32,6 +32,13 @@ set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 # Use Unicode for all projects.
 add_definitions(-DUNICODE -D_UNICODE)
 
+# Recent MSVC toolsets (VS 2022 17.14+ / VS 18, MSVC 14.5x) turn the inclusion
+# of <experimental/coroutine> into a hard error (STL1011). C++/WinRT, pulled in
+# by the flutter_inappwebview_windows plugin while compiling as C++17, still
+# includes that header, so silence the deprecation for all targets below
+# (runner + plugins). Directory-scoped, propagates to add_subdirectory() calls.
+add_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
+
 # Compilation settings that should be applied to most targets.
 #
 # Be cautious about adding new options here, as plugins use this function by
