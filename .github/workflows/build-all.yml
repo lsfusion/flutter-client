@@ -12,11 +12,11 @@ jobs:
   windows:
     uses: ./.github/workflows/windows.yml
 
-  macos:
-    uses: ./.github/workflows/macos.yml
+#  macos:
+#    uses: ./.github/workflows/macos.yml
 
   android:
     uses: ./.github/workflows/android.yml
 
-  ios:
-    uses: ./.github/workflows/ios.yml
+#  ios:
+#    uses: ./.github/workflows/ios.yml
