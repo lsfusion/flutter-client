@@ -1,9 +1,13 @@
 import 'dart:collection';
 import 'dart:convert';
+import 'dart:ffi';
 import 'dart:io';
+import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:win32/win32.dart';
 
 import 'cef_webview_stub.dart'
     if (dart.library.io) 'cef_webview_impl.dart';
@@ -104,6 +108,45 @@ class _WebViewPageState extends State<WebViewPage> {
           }
         }, true);
       });
+    })();
+  ''';
+
+  // lsFusion opens generated files (PDF, XLSX, ...) via `window.open` /
+  // `target="_blank"`. In a browser that's a new tab; under the WebView2 backend
+  // it falls back to navigating the same window — a "leave site" prompt and the
+  // file rendered inline, replacing the app. Intercept those file URLs in JS
+  // (before any navigation happens, so no beforeunload prompt) and hand them to
+  // the native side, which opens them with the OS-registered application.
+  static const String _fileOpenInterceptor = r'''
+    (function() {
+      if (window.__lsfFileInterceptor) return;
+      window.__lsfFileInterceptor = true;
+      var FILE_EXTS = {pdf:1,xls:1,xlsx:1,doc:1,docx:1,csv:1,txt:1,rtf:1,png:1,jpg:1,jpeg:1,gif:1,bmp:1,svg:1,tif:1,tiff:1,zip:1,rar:1,'7z':1,xml:1,json:1,ppt:1,pptx:1,odt:1,ods:1,odp:1};
+      function isFile(u) {
+        try {
+          var p = new URL(u, location.href).pathname.toLowerCase();
+          if (p.indexOf('/file/') >= 0) return true;
+          var m = p.match(/\.([a-z0-9]+)$/);
+          return !!(m && FILE_EXTS[m[1]]);
+        } catch (e) { return false; }
+      }
+      function hand(u) {
+        var abs = u;
+        try { abs = new URL(u, location.href).href; } catch (e) {}
+        try { window.flutter_inappwebview.callHandler('openFileExternally', String(abs)); } catch (e) {}
+      }
+      var _open = window.open;
+      window.open = function(u) {
+        if (u && isFile(u)) { hand(u); return null; }
+        return _open.apply(window, arguments);
+      };
+      document.addEventListener('click', function(e) {
+        var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+        if (a && (a.target === '_blank' || a.hasAttribute('download')) && isFile(a.href)) {
+          e.preventDefault();
+          hand(a.href);
+        }
+      }, true);
     })();
   ''';
 
@@ -215,6 +258,15 @@ class _WebViewPageState extends State<WebViewPage> {
           return null;
         },
       );
+
+      controller.addJavaScriptHandler(
+        handlerName: 'openFileExternally',
+        callback: (args) {
+          final url = args.isNotEmpty ? args[0] as String : '';
+          if (url.isNotEmpty) _openFileExternally(url);
+          return null;
+        },
+      );
     }
 
     controller.addJavaScriptHandler(
@@ -243,11 +295,16 @@ class _WebViewPageState extends State<WebViewPage> {
           source: _focusArtifactGuard,
           injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
         ),
-        if (Platform.isWindows)
+        if (Platform.isWindows) ...[
           UserScript(
             source: _cursorOverrideReporter,
             injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
           ),
+          UserScript(
+            source: _fileOpenInterceptor,
+            injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+          ),
+        ],
       ]),
       initialSettings: InAppWebViewSettings(
         javaScriptEnabled: true,
@@ -361,6 +418,43 @@ class _WebViewPageState extends State<WebViewPage> {
       onMessage: (message) => execute(message),
     );
     setState(() {});
+  }
+
+  // Download the file using the webview's session cookies, then open it with the
+  // OS-registered application. Falls back to handing the raw URL to the shell.
+  Future<void> _openFileExternally(String url) async {
+    try {
+      final uri = Uri.parse(url);
+      final cookies = await CookieManager.instance().getCookies(url: WebUri(url));
+      final headers = <String, String>{};
+      if (cookies.isNotEmpty) {
+        headers['Cookie'] = cookies.map((c) => '${c.name}=${c.value}').join('; ');
+      }
+      final resp = await http.get(uri, headers: headers);
+      if (resp.statusCode == 200 && resp.bodyBytes.isNotEmpty) {
+        var name = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'download';
+        name = name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
+        if (name.isEmpty) name = 'download';
+        final file = File('${Directory.systemTemp.path}\\$name');
+        await file.writeAsBytes(resp.bodyBytes);
+        _shellOpen(file.path);
+        return;
+      }
+    } catch (e) {
+      debugPrint('open file externally failed: $e');
+    }
+    _shellOpen(url); // fallback: let the default browser handle the URL
+  }
+
+  void _shellOpen(String target) {
+    final pTarget = target.toNativeUtf16();
+    final pOp = 'open'.toNativeUtf16();
+    try {
+      ShellExecute(0, pOp, pTarget, nullptr, nullptr, SW_SHOWNORMAL);
+    } finally {
+      calloc.free(pTarget);
+      calloc.free(pOp);
+    }
   }
 
   Future<String> execute(message) async {
