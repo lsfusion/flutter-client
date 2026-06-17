@@ -150,6 +150,91 @@ class _WebViewPageState extends State<WebViewPage> {
     })();
   ''';
 
+  // A native <select> opens an OS popup list. Under the composition-mode WebView2
+  // backend that popup flickers (show -> hide -> show): the webview's hidden HWND
+  // keeps losing focus to the Flutter window, so the OS popup, which is tied to
+  // that focus, closes and reopens. Block the native popup (preventDefault on
+  // mousedown) and show a custom in-DOM dropdown instead — it doesn't depend on
+  // native focus, so it can't flicker. Selecting an option sets the value and
+  // dispatches input/change so lsFusion picks it up. Keyboard use is left to the
+  // native control (only mouse opening is intercepted).
+  //
+  // IMPORTANT: do NOT close the menu on `blur`/`focusout` or gate it on
+  // `document.hasFocus()`. In this backend the focus signal is unreliable —
+  // `hasFocus()` reports false for sustained periods and a continuous focus churn
+  // fires ~2 blur/sec even while idle. Closing on any of those is exactly what made
+  // the custom menu flicker too. The menu is closed only by real user actions:
+  // an outside mousedown, an option pick, a keypress, a scroll, or a resize.
+  static const String _selectDropdownFix = r'''
+    (function() {
+      if (window.__lsfSelectFix) return;
+      window.__lsfSelectFix = true;
+      var menu = null, menuSel = null;
+      function close() {
+        if (!menu) return;
+        menu.remove(); menu = null; menuSel = null;
+        document.removeEventListener('mousedown', onDoc, true);
+        document.removeEventListener('keydown', onKey, true);
+        document.removeEventListener('scroll', onScroll, true);
+        window.removeEventListener('resize', close, true);
+      }
+      function onDoc(e) { if (menu && !menu.contains(e.target)) close(); }
+      function onKey() { if (menu) close(); }
+      function onScroll(e) { if (menu && !menu.contains(e.target)) close(); }
+      function build(sel) {
+        var r = sel.getBoundingClientRect();
+        menu = document.createElement('div');
+        menu.setAttribute('data-lsf-select-menu', '1');
+        menu.style.cssText = 'position:fixed;z-index:2147483647;background:Canvas;color:CanvasText;border:1px solid rgba(0,0,0,.25);border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.25);max-height:50vh;overflow-y:auto;font:inherit;box-sizing:border-box;min-width:' + Math.round(r.width) + 'px;';
+        for (var i = 0; i < sel.options.length; i++) {
+          (function(i) {
+            var opt = sel.options[i];
+            var item = document.createElement('div');
+            item.textContent = opt.text;
+            var isSel = i === sel.selectedIndex;
+            item.style.cssText = 'padding:5px 10px;cursor:pointer;white-space:nowrap;' + (isSel ? 'background:Highlight;color:HighlightText;' : '');
+            item.addEventListener('mouseenter', function() { if (i !== sel.selectedIndex) item.style.background = 'rgba(127,127,127,.2)'; });
+            item.addEventListener('mouseleave', function() { if (i !== sel.selectedIndex) item.style.background = ''; });
+            item.addEventListener('mousedown', function(e) {
+              e.preventDefault(); e.stopPropagation();
+              if (sel.selectedIndex !== i) {
+                sel.selectedIndex = i;
+                sel.dispatchEvent(new Event('input', { bubbles: true }));
+                sel.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+              close();
+            });
+            menu.appendChild(item);
+          })(i);
+        }
+        document.body.appendChild(menu);
+        var mr = menu.getBoundingClientRect();
+        var top = r.bottom, left = r.left;
+        if (top + mr.height > window.innerHeight) top = Math.max(0, r.top - mr.height);
+        if (left + mr.width > window.innerWidth) left = Math.max(0, window.innerWidth - mr.width);
+        menu.style.top = Math.round(top) + 'px';
+        menu.style.left = Math.round(left) + 'px';
+        menuSel = sel;
+        var cur = menu.children[sel.selectedIndex];
+        if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' });
+        setTimeout(function() {
+          document.addEventListener('mousedown', onDoc, true);
+          document.addEventListener('keydown', onKey, true);
+          document.addEventListener('scroll', onScroll, true);
+          window.addEventListener('resize', close, true);
+        }, 0);
+      }
+      document.addEventListener('mousedown', function(e) {
+        var sel = e.target && e.target.closest ? e.target.closest('select') : null;
+        if (sel && !sel.multiple && !sel.disabled && sel.options.length) {
+          e.preventDefault();
+          if (menuSel === sel) { close(); }
+          else { close(); try { sel.focus(); } catch (x) {} build(sel); }
+        }
+      }, true);
+    })();
+  ''';
+
   // The composition-mode plugin can't map Chromium's col-resize/row-resize
   // cursors to Flutter ones (no system equivalents exist), leaving a plain
   // arrow over lsFusion's splitters and grid column handles — see
@@ -302,6 +387,10 @@ class _WebViewPageState extends State<WebViewPage> {
           ),
           UserScript(
             source: _fileOpenInterceptor,
+            injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+          ),
+          UserScript(
+            source: _selectDropdownFix,
             injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
           ),
         ],
