@@ -190,9 +190,11 @@ class _WebViewPageState extends State<WebViewPage> {
           (function(i) {
             var opt = sel.options[i];
             var item = document.createElement('div');
-            item.textContent = opt.text;
+            item.textContent = (opt.text && opt.text.trim()) ? opt.text : String.fromCharCode(160);
             var isSel = i === sel.selectedIndex;
-            item.style.cssText = 'padding:5px 10px;cursor:pointer;white-space:nowrap;' + (isSel ? 'background:Highlight;color:HighlightText;' : '');
+            // min-height keeps empty options (e.g. the blank "no value" row) the
+            // same height as text rows instead of collapsing to a thin strip.
+            item.style.cssText = 'padding:5px 10px;min-height:1.2em;cursor:pointer;white-space:nowrap;' + (isSel ? 'background:Highlight;color:HighlightText;' : '');
             item.addEventListener('mouseenter', function() { if (i !== sel.selectedIndex) item.style.background = 'rgba(127,127,127,.2)'; });
             item.addEventListener('mouseleave', function() { if (i !== sel.selectedIndex) item.style.background = ''; });
             item.addEventListener('mousedown', function(e) {
