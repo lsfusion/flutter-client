@@ -135,9 +135,24 @@ class _WebViewPageState extends State<WebViewPage> {
         try { abs = new URL(u, location.href).href; } catch (e) {}
         try { window.flutter_inappwebview.callHandler('openFileExternally', String(abs)); } catch (e) {}
       }
+      // Return a Window-like stub instead of null: lsFusion's print/report code
+      // assigns to the value returned by window.open (e.g. win.onload = ...), and
+      // `null.onload = ...` throws "Cannot set properties of null". The real file
+      // is opened natively via hand(), so this stub only needs to absorb the
+      // calls the caller makes on the "opened" window.
+      function fakeWin() {
+        var noop = function() {};
+        return {
+          closed: false, opener: window, onload: null, onunload: null, name: '',
+          focus: noop, blur: noop, print: noop, close: function() { this.closed = true; },
+          addEventListener: noop, removeEventListener: noop, postMessage: noop,
+          location: { href: '', replace: noop, assign: noop, reload: noop },
+          document: { write: noop, writeln: noop, open: noop, close: noop }
+        };
+      }
       var _open = window.open;
       window.open = function(u) {
-        if (u && isFile(u)) { hand(u); return null; }
+        if (u && isFile(u)) { hand(u); return fakeWin(); }
         return _open.apply(window, arguments);
       };
       document.addEventListener('click', function(e) {
