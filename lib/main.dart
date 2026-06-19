@@ -6,6 +6,7 @@ import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:http/http.dart' as http;
+import 'package:open_filex/open_filex.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:win32/win32.dart';
 
@@ -360,7 +361,12 @@ class _WebViewPageState extends State<WebViewPage> {
           return null;
         },
       );
+    }
 
+    // Registered wherever the _fileOpenInterceptor user script is injected
+    // (Windows + mobile): the interceptor hands file URLs here so we open them
+    // with the OS instead of letting the webview navigate to them.
+    if (Platform.isWindows || isMobile) {
       controller.addJavaScriptHandler(
         handlerName: 'openFileExternally',
         callback: (args) {
@@ -397,13 +403,18 @@ class _WebViewPageState extends State<WebViewPage> {
           source: _focusArtifactGuard,
           injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
         ),
+        // The file-open interceptor is needed wherever the host opens generated
+        // files via window.open / target=_blank: on Windows (WebView2 navigates
+        // in place) and on mobile (Android WebView shows a "leave site" prompt
+        // and then drops the file — there is no native download handling).
+        if (Platform.isWindows || isMobile)
+          UserScript(
+            source: _fileOpenInterceptor,
+            injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+          ),
         if (Platform.isWindows) ...[
           UserScript(
             source: _cursorOverrideReporter,
-            injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
-          ),
-          UserScript(
-            source: _fileOpenInterceptor,
             injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
           ),
           UserScript(
@@ -541,15 +552,24 @@ class _WebViewPageState extends State<WebViewPage> {
         var name = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : 'download';
         name = name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
         if (name.isEmpty) name = 'download';
-        final file = File('${Directory.systemTemp.path}\\$name');
+        final file = File(
+            '${Directory.systemTemp.path}${Platform.pathSeparator}$name');
         await file.writeAsBytes(resp.bodyBytes);
-        _shellOpen(file.path);
+        if (Platform.isWindows) {
+          _shellOpen(file.path); // ShellExecute via win32
+        } else {
+          await OpenFilex.open(file.path); // Android/iOS/macOS system opener
+        }
         return;
       }
     } catch (e) {
       debugPrint('open file externally failed: $e');
     }
-    _shellOpen(url); // fallback: let the default browser handle the URL
+    // Fallback: on Windows hand the raw URL to the shell (default browser).
+    // Other platforms have no safe raw-URL opener here, so just log above.
+    if (Platform.isWindows) {
+      _shellOpen(url);
+    }
   }
 
   void _shellOpen(String target) {
