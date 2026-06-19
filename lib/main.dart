@@ -646,11 +646,25 @@ class _WebViewPageState extends State<WebViewPage> {
             : const Center(child: CircularProgressIndicator()))
         : _buildInAppWebView();
 
+    // On Android 15+/edge-to-edge the manifest's adjustResize no longer shrinks
+    // the window for the soft keyboard, so a focused input in the lower part of
+    // a form ends up hidden behind the keyboard. Reserve the keyboard height
+    // ourselves (and turn off Scaffold's own resize so we don't subtract it
+    // twice) so the webview shrinks and scrolls the focused field into view.
+    final imeInset = MediaQuery.of(context).viewInsets.bottom;
+
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       body: SafeArea(
         child: Stack(
           children: [
-            Positioned.fill(child: webViewContent),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: imeInset,
+              child: webViewContent,
+            ),
             // Applies the cursors reported by _cursorOverrideReporter.
             // opaque: false keeps it transparent to pointer events; being in
             // front of the webview, a non-defer cursor here wins over the
