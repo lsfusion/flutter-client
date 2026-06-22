@@ -253,6 +253,51 @@ class _WebViewPageState extends State<WebViewPage> {
     })();
   ''';
 
+  // lsFusion renders multi-line text / script properties
+  // with the ACE editor. ACE sizes itself from its container's
+  // height, which lsFusion sets via a percentage/flex chain. The older Android
+  // System WebView resolves that height to 0 (same class of bug as the
+  // `-webkit-fill-available` modal collapse), so `.ace_editor` becomes 0px tall:
+  // its content is invisible and, crucially, a tap lands on the empty outer
+  // container instead of ACE's hit area — so ACE's hidden <textarea> never gets
+  // focus, the soft keyboard never opens, and the user cannot type at all.
+  // (Works on desktop/WebView2 where the height resolves correctly.)
+  // Fix (mobile only): give the editor a definite height by absolutely filling
+  // its parent, then nudge ACE to re-measure. A MutationObserver catches editors
+  // created later when forms open. Scoped per-editor so no global side effects.
+  static const String _aceEditorHeightFix = r'''
+    (function() {
+      if (window.__lsfAceFix) return;
+      window.__lsfAceFix = true;
+      function fix(ed) {
+        if (!ed || ed.__lsfAceFixed) return;
+        ed.__lsfAceFixed = true;
+        var box = ed.parentElement;
+        if (box && getComputedStyle(box).position === 'static') box.style.position = 'relative';
+        ed.style.position = 'absolute';
+        ed.style.top = '0'; ed.style.left = '0'; ed.style.right = '0'; ed.style.bottom = '0';
+        try { if (window.ace) window.ace.edit(ed).resize(true); } catch (e) {}
+      }
+      function scan(root) {
+        if (root && root.classList && root.classList.contains('ace_editor')) fix(root);
+        if (root && root.querySelectorAll) {
+          var list = root.querySelectorAll('.ace_editor');
+          for (var i = 0; i < list.length; i++) fix(list[i]);
+        }
+      }
+      new MutationObserver(function(muts) {
+        for (var i = 0; i < muts.length; i++) {
+          var added = muts[i].addedNodes;
+          for (var j = 0; j < added.length; j++) {
+            if (added[j].nodeType === 1) scan(added[j]);
+          }
+        }
+      }).observe(document.documentElement, { childList: true, subtree: true });
+      document.addEventListener('DOMContentLoaded', function() { scan(document); });
+      scan(document);
+    })();
+  ''';
+
   // The composition-mode plugin can't map Chromium's col-resize/row-resize
   // cursors to Flutter ones (no system equivalents exist), leaving a plain
   // arrow over lsFusion's splitters and grid column handles — see
@@ -422,6 +467,11 @@ class _WebViewPageState extends State<WebViewPage> {
             injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
           ),
         ],
+        if (isMobile)
+          UserScript(
+            source: _aceEditorHeightFix,
+            injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+          ),
       ]),
       initialSettings: InAppWebViewSettings(
         javaScriptEnabled: true,
