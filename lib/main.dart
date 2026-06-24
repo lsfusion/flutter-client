@@ -510,6 +510,7 @@ class _WebViewPageState extends State<WebViewPage> {
         ''');
         setState(() => _isLoading = false);
         _injectSwipeDetector();
+        if (isMobile) _injectKeyboardScrollFix();
         if (!_hasLoadError) {
           _checkHideAddressBar();
         }
@@ -569,6 +570,47 @@ class _WebViewPageState extends State<WebViewPage> {
             }
           }
         }, { passive: true });
+      })();
+    ''');
+  }
+
+  // On Android the WebView never sees the soft keyboard (Flutter owns the IME),
+  // so the browser's native "scroll the focused editable into view above the
+  // keyboard" never fires — we only shrink the WebView (see build()). Replicate
+  // the native behaviour: whenever the viewport resizes (keyboard shows/hides,
+  // address bar toggles), if the focused field is now outside the visible area,
+  // scroll it back into view. Centering also leaves room for lsFusion's own
+  // suggestion/dropdown popups instead of letting them cover the field.
+  void _injectKeyboardScrollFix() {
+    _inAppController?.evaluateJavascript(source: '''
+      (function() {
+        if (window.__kbScrollFixInstalled) return;
+        window.__kbScrollFixInstalled = true;
+
+        function isEditable(el) {
+          if (!el) return false;
+          var t = el.tagName;
+          return t === 'INPUT' || t === 'TEXTAREA' || el.isContentEditable;
+        }
+
+        function keepFocusedVisible() {
+          var ae = document.activeElement;
+          if (!isEditable(ae)) return;
+          var vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+          var r = ae.getBoundingClientRect();
+          if (r.top < 0 || r.bottom > vh) {
+            try { ae.scrollIntoView({ block: 'center', inline: 'nearest' }); } catch (e) {}
+          }
+        }
+
+        var timer = null;
+        function onResize() {
+          if (timer) clearTimeout(timer);
+          // let the WebView resize / reflow settle before re-revealing the field
+          timer = setTimeout(keepFocusedVisible, 100);
+        }
+
+        (window.visualViewport || window).addEventListener('resize', onResize);
       })();
     ''');
   }
