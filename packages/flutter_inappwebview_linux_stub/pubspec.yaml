@@ -1,0 +1,13 @@
+name: flutter_inappwebview_linux
+description: >-
+  Empty local stub that replaces the real flutter_inappwebview_linux package
+  (the WPE-WebKit Linux backend of flutter_inappwebview). On Linux this app
+  uses webview_cef instead, so the WPE backend is intentionally excluded to
+  avoid a libwpewebkit build- and runtime-dependency. Pulled in via
+  dependency_overrides in the root pubspec.yaml. Declares no plugin platform,
+  so it is never added to linux/flutter/generated_plugins.cmake.
+version: 0.1.0-beta.1
+publish_to: 'none'
+
+environment:
+  sdk: ^3.8.0
