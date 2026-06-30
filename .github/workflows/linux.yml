@@ -209,7 +209,6 @@ jobs:
             xclip \
             xz \
             zstd \
-            webkit2gtk-4.1 \
             git \
             curl \
             tar \
@@ -261,7 +260,7 @@ jobs:
           arch=('x86_64')
           url="https://lsfusion.org"
           license=('MIT')
-          depends=('gtk3' 'libayatana-appindicator' 'xz' 'nss' 'nspr' 'alsa-lib' 'glu' 'libx11' 'webkit2gtk-4.1')
+          depends=('gtk3' 'libayatana-appindicator' 'xz' 'nss' 'nspr' 'alsa-lib' 'glu' 'libx11')
           options=('!strip')
           
           package() {

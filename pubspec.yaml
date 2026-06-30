@@ -47,6 +47,15 @@ dependencies:
   cupertino_icons: ^1.0.8
   open_filex: ^4.7.0
 
+# flutter_inappwebview (beta) ships a Linux backend, flutter_inappwebview_linux,
+# that hard-requires WPE WebKit (libwpewebkit-1.0-dev) at CMake-configure time and
+# would also become a runtime dependency for every Linux user. On Linux we render
+# the webview through webview_cef (see lib/cef_webview_impl.dart), so we replace
+# that backend with an empty local stub to keep WPE out of the Linux build entirely.
+dependency_overrides:
+  flutter_inappwebview_linux:
+    path: packages/flutter_inappwebview_linux_stub
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
