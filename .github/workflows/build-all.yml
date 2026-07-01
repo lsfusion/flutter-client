@@ -1,16 +1,49 @@
 name: Build All Platforms
 on:
-#  push:
-#    branches: [ main ]
+  push:
+    branches: [ main ]
 #  pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
+  check-version:
+    name: Check version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get.outputs.version }}
+      should_build: ${{ steps.get.outputs.should_build }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Determine version and check if already released
+        id: get
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            echo "Version $VERSION already released (tag v$VERSION exists). Skipping build."
+          else
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "New version $VERSION detected (tag v$VERSION not found). Building."
+          fi
+
+  # Manual runs (workflow_dispatch) always rebuild, regardless of the version
+  # check above; push runs only build when the version actually changed.
   linux:
+    needs: check-version
+    if: github.event_name == 'workflow_dispatch' || needs.check-version.outputs.should_build == 'true'
     uses: ./.github/workflows/linux.yml
     secrets: inherit
 
   windows:
+    needs: check-version
+    if: github.event_name == 'workflow_dispatch' || needs.check-version.outputs.should_build == 'true'
     uses: ./.github/workflows/windows.yml
     secrets: inherit
 
@@ -19,9 +52,28 @@ jobs:
 #    secrets: inherit
 
   android:
+    needs: check-version
+    if: github.event_name == 'workflow_dispatch' || needs.check-version.outputs.should_build == 'true'
     uses: ./.github/workflows/android.yml
     secrets: inherit
 
 #  ios:
 #    uses: ./.github/workflows/ios.yml
 #    secrets: inherit
+
+  # Only push-triggered runs create the release tag. Manual reruns rebuild
+  # and reupload to the CDN but never create or move a tag.
+  tag-release:
+    name: Tag released version
+    needs: [ check-version, linux, windows, android ]
+    if: github.event_name == 'push' && needs.check-version.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Tag and push released version
+        run: |
+          VERSION="${{ needs.check-version.outputs.version }}"
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
