@@ -14,6 +14,7 @@ class CefWebViewHelper {
     required void Function() onLoadStart,
     required void Function() onLoadEnd,
     required Future<String> Function(String message) onMessage,
+    required void Function(String theme) onThemeChanged,
   }) async {
     await cef.WebviewManager().initialize();
     final controller = cef.WebviewManager().createWebView();
@@ -35,7 +36,12 @@ class CefWebViewHelper {
           controller.executeJavaScript(
               await onMessage(jsonDecode(message.message) as String));
         },
-      )
+      ),
+      cef.JavascriptChannel(
+        name: 'themeChanged',
+        onMessageReceived: (cef.JavascriptMessage message) =>
+            onThemeChanged(jsonDecode(message.message) as String),
+      ),
     });
 
     _isReady = true;

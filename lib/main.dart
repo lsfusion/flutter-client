@@ -4,6 +4,7 @@ import 'dart:ffi';
 import 'dart:io';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:http/http.dart' as http;
 import 'package:open_filex/open_filex.dart';
@@ -51,6 +52,36 @@ class _WebViewPageState extends State<WebViewPage> {
   bool _isMouseInAddressBar = false;
   bool _isAddressBarFocused = false;
   bool _hasLoadError = false;
+
+  // Reported by _themeReporter (see below); persisted so the next launch
+  // paints in the last known theme before the page gets to report it.
+  bool _isDarkTheme = false;
+
+  // lsFusion's Bootstrap body backgrounds: light #fff, dark #212529.
+  Color get _backgroundColor =>
+      _isDarkTheme ? const Color(0xFF212529) : const Color(0xFFFFFFFF);
+
+  void _applyTheme(String theme) {
+    final dark = theme == 'dark';
+    if (dark == _isDarkTheme) return;
+    setState(() => _isDarkTheme = dark);
+    _applySystemBars();
+    SharedPreferences.getInstance()
+        .then((p) => p.setBool('darkTheme', _isDarkTheme));
+  }
+
+  // Mobile system bar icons must contrast with _backgroundColor behind them.
+  void _applySystemBars() {
+    final icons = _isDarkTheme ? Brightness.light : Brightness.dark;
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      // iOS derives icon contrast from the bar background's brightness.
+      statusBarBrightness: _isDarkTheme ? Brightness.dark : Brightness.light,
+      statusBarIconBrightness: icons,
+      systemNavigationBarColor: _backgroundColor,
+      systemNavigationBarIconBrightness: icons,
+    ));
+  }
 
   String _currentUrl = 'http://127.0.0.1:8080/main';
 
@@ -331,6 +362,54 @@ class _WebViewPageState extends State<WebViewPage> {
     })();
   ''';
 
+  // lsFusion mirrors its color theme into data-bs-theme on <html>
+  // (MainFrame.changeColorTheme; absent = light) and fires no JS event, so
+  // the attribute is watched with a MutationObserver. Observe document, not
+  // documentElement: at document-start injection time <html> does not exist
+  // yet, and observing null would silently kill this script. `send` is the
+  // per-webview JS statement delivering `theme` ('dark'/'light') to Dart.
+  static String _themeReporter(String send) => '''
+    (function() {
+      if (window.__lsfThemeReporterInstalled) return;
+      window.__lsfThemeReporterInstalled = true;
+      var last = '';
+      function report() {
+        var el = document.documentElement;
+        var theme = el && el.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light';
+        if (theme === last) return;
+        last = theme;
+        $send;
+      }
+      new MutationObserver(report).observe(document, {
+        attributes: true, attributeFilter: ['data-bs-theme'], subtree: true
+      });
+      // An absent attribute means "light" only once the page is done booting;
+      // reporting it earlier would flip a persisted dark theme on every load.
+      // Boot end is observable: main.jsp's #loadingWrapper is removed (from
+      // body) right AFTER the boot flow has applied the color theme, and
+      // pages that never had it (login and friends) don't set the attribute
+      // at all — they really are light.
+      function reportFinal() {
+        if (document.getElementById('loadingWrapper')) {
+          var mo = new MutationObserver(function() {
+            if (!document.getElementById('loadingWrapper')) {
+              mo.disconnect();
+              report();
+            }
+          });
+          mo.observe(document.body, { childList: true });
+        } else {
+          report();
+        }
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', reportFinal);
+      } else {
+        reportFinal();
+      }
+    })();
+  ''';
+
   Future<void> _initCustomCursors() async {
     final scale = WidgetsBinding
             .instance.platformDispatcher.implicitView?.devicePixelRatio ??
@@ -375,8 +454,10 @@ class _WebViewPageState extends State<WebViewPage> {
     }
 
     setState(() {
+      _isDarkTheme = prefs.getBool('darkTheme') ?? false;
       _isReady = true;
     });
+    _applySystemBars();
   }
 
   void _onWebViewCreated(InAppWebViewController controller) {
@@ -434,6 +515,14 @@ class _WebViewPageState extends State<WebViewPage> {
         return null;
       },
     );
+
+    controller.addJavaScriptHandler(
+      handlerName: 'themeChanged',
+      callback: (args) {
+        _applyTheme(args.isNotEmpty ? args[0] as String : '');
+        return null;
+      },
+    );
   }
 
   Widget _buildInAppWebView() {
@@ -446,6 +535,11 @@ class _WebViewPageState extends State<WebViewPage> {
         ),
         UserScript(
           source: _focusArtifactGuard,
+          injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+        ),
+        UserScript(
+          source: _themeReporter(
+              "window.flutter_inappwebview.callHandler('themeChanged', theme)"),
           injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
         ),
         // The file-open interceptor is needed wherever the host opens generated
@@ -636,8 +730,14 @@ class _WebViewPageState extends State<WebViewPage> {
         setState(() => _isLoading = false);
         _checkHideAddressBar();
         _cefHelper!.executeJavaScript(_cefFlutterShim);
+        // CEF has no document-start user scripts, so (re)install per load.
+        // `external` is a persistent CEF V8 extension, unlike the channel
+        // alias globals, which are wiped on navigation.
+        _cefHelper!.executeJavaScript(_themeReporter(
+            "external.JavaScriptChannel('themeChanged', theme, null)"));
       },
       onMessage: (message) => execute(message),
+      onThemeChanged: _applyTheme,
     );
     setState(() {});
   }
@@ -740,15 +840,16 @@ class _WebViewPageState extends State<WebViewPage> {
   @override
   Widget build(BuildContext context) {
     if (!_isReady) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        backgroundColor: _backgroundColor,
+        body: const Center(child: CircularProgressIndicator(color: Colors.grey)),
       );
     }
 
     final webViewContent = isLinux
         ? (_cefHelper != null && _cefHelper!.isReady
             ? _cefHelper!.buildWebView()
-            : const Center(child: CircularProgressIndicator()))
+            : const Center(child: CircularProgressIndicator(color: Colors.grey)))
         : _buildInAppWebView();
 
     // On Android 15+/edge-to-edge the manifest's adjustResize no longer shrinks
@@ -759,6 +860,7 @@ class _WebViewPageState extends State<WebViewPage> {
     final imeInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Scaffold(
+      backgroundColor: _backgroundColor,
       resizeToAvoidBottomInset: false,
       body: SafeArea(
         child: Stack(
@@ -815,24 +917,29 @@ class _WebViewPageState extends State<WebViewPage> {
   }
 
   Widget _buildAddressBarArea() {
-    final addressBar = Container(
-      color: Theme.of(context).scaffoldBackgroundColor,
-      padding: const EdgeInsets.all(8.0),
-      child: AddressBar(
-        initialUrl: _currentUrl,
-        isLoading: _isLoading,
-        onNavigate: (url) {
-          setState(() {
-            _currentUrl = url;
-            _showAddressBar = true;
-            _isLoading = true;
-          });
-          if (isLinux) {
-            _cefHelper?.loadUrl(url);
-          } else {
-            _inAppController?.loadUrl(urlRequest: URLRequest(url: WebUri(url)));
-          }
-        },
+    final addressBar = Theme(
+      data: ThemeData(
+        brightness: _isDarkTheme ? Brightness.dark : Brightness.light,
+      ),
+      child: Container(
+        color: _backgroundColor,
+        padding: const EdgeInsets.all(8.0),
+        child: AddressBar(
+          initialUrl: _currentUrl,
+          isLoading: _isLoading,
+          onNavigate: (url) {
+            setState(() {
+              _currentUrl = url;
+              _showAddressBar = true;
+              _isLoading = true;
+            });
+            if (isLinux) {
+              _cefHelper?.loadUrl(url);
+            } else {
+              _inAppController?.loadUrl(urlRequest: URLRequest(url: WebUri(url)));
+            }
+          },
+        ),
       ),
     );
 

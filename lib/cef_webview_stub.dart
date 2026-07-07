@@ -8,6 +8,7 @@ class CefWebViewHelper {
     required void Function() onLoadStart,
     required void Function() onLoadEnd,
     required Future<String> Function(String message) onMessage,
+    required void Function(String theme) onThemeChanged,
   }) async {}
 
   Widget buildWebView() => const SizedBox();
