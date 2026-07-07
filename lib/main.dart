@@ -615,14 +615,27 @@ class _WebViewPageState extends State<WebViewPage> {
     ''');
   }
 
+  // webview_cef's own `Flutter` alias is a bare function (and is wiped on
+  // navigation anyway); the web client expects `Flutter.postMessage(...)`
+  // and decides at boot whether it runs under Flutter, so the shim must be
+  // in place before the page scripts run (onLoadStart) — onLoadEnd again as
+  // a fallback in case the start-time injection raced the navigation.
+  static const String _cefFlutterShim =
+      "window.Flutter = { postMessage: function(m) {"
+      " external.JavaScriptChannel('Flutter', m, null); } };";
+
   void _initCefWebView() async {
     _cefHelper = CefWebViewHelper();
     await _cefHelper!.initialize(
       _currentUrl,
-      onLoadStart: () => setState(() => _isLoading = true),
+      onLoadStart: () {
+        setState(() => _isLoading = true);
+        _cefHelper!.executeJavaScript(_cefFlutterShim);
+      },
       onLoadEnd: () {
         setState(() => _isLoading = false);
         _checkHideAddressBar();
+        _cefHelper!.executeJavaScript(_cefFlutterShim);
       },
       onMessage: (message) => execute(message),
     );

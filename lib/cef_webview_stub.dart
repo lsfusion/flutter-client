@@ -13,4 +13,6 @@ class CefWebViewHelper {
   Widget buildWebView() => const SizedBox();
 
   void loadUrl(String url) {}
+
+  void executeJavaScript(String code) {}
 }

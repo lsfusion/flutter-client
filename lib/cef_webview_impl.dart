@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/widgets.dart';
 import 'package:webview_cef/webview_cef.dart' as cef;
 
@@ -25,15 +27,22 @@ class CefWebViewHelper {
     await controller.initialize(url);
 
     controller.setJavaScriptChannels({
+      // The CEF transport JSON-stringifies the payload once more on the way
+      // here, hence the jsonDecode.
       cef.JavascriptChannel(
         name: 'Flutter',
         onMessageReceived: (cef.JavascriptMessage message) async {
-          controller.executeJavaScript(await onMessage(message.message));
+          controller.executeJavaScript(
+              await onMessage(jsonDecode(message.message) as String));
         },
       )
     });
 
     _isReady = true;
+  }
+
+  void executeJavaScript(String code) {
+    _controller?.executeJavaScript(code);
   }
 
   Widget buildWebView() {
