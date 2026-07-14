@@ -116,10 +116,28 @@ class _WebViewPageState extends State<WebViewPage> {
       window.Flutter = { postMessage: function(m) { call('Flutter', m); } };
       window.FlutterAddressBar = { postMessage: function(m) { call('FlutterAddressBar', m); } };
       window.chrome = window.chrome || {};
-      if (!window.chrome.webview || typeof window.chrome.webview.postMessage !== 'function') {
-        window.chrome.webview = window.chrome.webview || {};
-        window.chrome.webview.postMessage = function(m) { call('Flutter', m); };
-      }
+      window.chrome.webview = window.chrome.webview || {};
+      // On Windows WebView2 already provides a native chrome.webview.postMessage
+      // that the flutter_inappwebview plugin's own bridge uses (envelope
+      // {name:'callHandler',...}). But the lsFusion web client ALSO posts here, in
+      // its own {command,arguments,id} format (getFlutterObject() returns
+      // chrome.webview on Windows) — and the plugin drops anything that isn't its
+      // callHandler envelope, so every client bridge action (WRITE/READ CLIENT,
+      // getAvailablePrinters, PRINT ... NOPREVIEW TO, sockets, ...) was silently
+      // lost. So always wrap postMessage and route by message type: lsFusion's
+      // JSON-string messages go to the Flutter handler, everything else (incl. the
+      // plugin's own object messages) passes through to the native postMessage.
+      // Routing by type keeps this safe regardless of script-injection order — no
+      // recursion even if the plugin captured this wrapper as its _postMessage.
+      var _nativePM = null;
+      try {
+        if (typeof window.chrome.webview.postMessage === 'function')
+          _nativePM = window.chrome.webview.postMessage.bind(window.chrome.webview);
+      } catch (e) {}
+      window.chrome.webview.postMessage = function(m) {
+        if (typeof m === 'string') { call('Flutter', m); return; }
+        if (_nativePM) return _nativePM(m);
+      };
     })();
   ''';
 
@@ -819,7 +837,8 @@ class _WebViewPageState extends State<WebViewPage> {
       case 'listFiles':
         return await listFiles(arguments[0], arguments[1]);
       case 'writeFile':
-        return await writeFile(arguments[0], arguments[1]);
+        return await writeFile(arguments[0], arguments[1],
+            arguments.length > 2 ? arguments[2] as String? : null);
       case 'getAvailablePrinters':
         return await getAvailablePrinters();
       case 'print':

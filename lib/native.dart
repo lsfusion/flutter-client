@@ -200,27 +200,39 @@ class FileInfo {
   };
 }
 
-Future<Map<String, dynamic>> writeFile(String url, String path) async {
+Future<Map<String, dynamic>> writeFile(String url, String path,
+    [String? fileData]) async {
   try {
-    final uri = Uri.parse(url);
-    final httpClient = HttpClient()..autoUncompress = true;
+    Uint8List bytes;
+    if (fileData != null) {
+      // WRITE CLIENT delivers the file content as base64 in `fileData` (the web
+      // client always fills it — see ClientActionToGwtConverter.convertAction).
+      // Write those bytes directly, the same way the web-agent does. Downloading
+      // `url` instead reaches the app server WITHOUT the webview's session
+      // cookie, so it 401s and no file is created — and because WRITE is a
+      // fire-and-forget action, that failure was silent.
+      bytes = base64Decode(fileData);
+    } else {
+      final uri = Uri.parse(url);
+      final httpClient = HttpClient()..autoUncompress = true;
 
-    final request = await httpClient.getUrl(uri);
-    request.followRedirects = true;
-    request.headers.set('User-Agent', 'Mozilla/5.0 (compatible; Dart)');
+      final request = await httpClient.getUrl(uri);
+      request.followRedirects = true;
+      request.headers.set('User-Agent', 'Mozilla/5.0 (compatible; Dart)');
 
-    final response = await request.close();
-    if (response.statusCode != 200) {
-      return {
-        'result': base64Encode(
-          utf8.encode('HTTP error: ${response.statusCode}'),
-        ),
-      };
+      final response = await request.close();
+      if (response.statusCode != 200) {
+        return {
+          'result': base64Encode(
+            utf8.encode('HTTP error: ${response.statusCode}'),
+          ),
+        };
+      }
+      bytes = await consolidateHttpClientResponseBytes(response);
     }
 
-    final bytes = await consolidateHttpClientResponseBytes(response);
     if (bytes.isEmpty) {
-      return {'result': base64Encode(utf8.encode('Downloaded 0 bytes'))};
+      return {'result': base64Encode(utf8.encode('Wrote 0 bytes'))};
     }
 
     final file = File(path);
