@@ -46,6 +46,7 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   open_filex: ^4.7.0
+  desktop_drop: ^0.7.1
 
 # flutter_inappwebview (beta) ships a Linux backend, flutter_inappwebview_linux,
 # that hard-requires WPE WebKit (libwpewebkit-1.0-dev) at CMake-configure time and
@@ -55,6 +56,12 @@ dependencies:
 dependency_overrides:
   flutter_inappwebview_linux:
     path: packages/flutter_inappwebview_linux_stub
+  # desktop_drop pulls in cross_file, whose 0.3.5+3 bumped its Dart floor to
+  # 3.10 (a constraint-only change; the library code is unchanged). Pin the
+  # last 3.8-compatible patch so the app keeps building on the Flutter 3.32
+  # toolchain instead of forcing everyone onto Dart 3.10. desktop_drop only
+  # asks for cross_file ^0.3.4+2, so this stays within its range.
+  cross_file: 0.3.5+2
 
 dev_dependencies:
   flutter_test:
