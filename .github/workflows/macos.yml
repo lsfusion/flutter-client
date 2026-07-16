@@ -57,7 +57,7 @@ jobs:
           cp build/macos/Build/Products/Release/lsfusion_client-macos.dmg deploy_out/
 
       - name: Upload to CDN via FTP
-        uses: sand4rt/ftp-deployer@v1.8
+        uses: sand4rt/ftp-deployer@v1.10
         with:
           host: ${{ secrets.SFTP_HOST }}
           username: ${{ secrets.SFTP_USERNAME }}

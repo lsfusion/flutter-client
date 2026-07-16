@@ -34,7 +34,7 @@ jobs:
           cp build/app/outputs/flutter-apk/app-release.apk "deploy_out/lsfusion-client-$VERSION.apk"
 
       - name: Upload to CDN via FTP
-        uses: sand4rt/ftp-deployer@v1.8
+        uses: sand4rt/ftp-deployer@v1.10
         with:
           host: ${{ secrets.SFTP_HOST }}
           username: ${{ secrets.SFTP_USERNAME }}
