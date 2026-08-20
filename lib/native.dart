@@ -117,9 +117,9 @@ Future<Map<String, dynamic>> makeDir(String path) async {
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
-    return {'result': true};
+    return {'result': null};
   } catch (e) {
-    return {'error': 'Error making dir: $e'};
+    return {'result': 'Error making dir: $e'};
   }
 }
 
