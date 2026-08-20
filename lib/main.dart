@@ -373,11 +373,20 @@ class _WebViewPageState extends State<WebViewPage> {
   Future<String> execute(message) async {
     final data = jsonDecode(message);
     final cmd = data['command'];
-    final arguments = data['arguments'] as List<dynamic>;
     final id = data['id'];
 
-    final result = await executeCommand(cmd, arguments);
-    return "window.flutterCallback('$cmd', ${jsonEncode(result)}, '$id');";
+    String answer;
+    try {
+      answer = jsonEncode(
+          await executeCommand(cmd, data['arguments'] as List<dynamic>));
+    } catch (failure) {
+      // The page waits for this callback and for nothing else, so a command that
+      // threw its way out of here left it waiting for good - and since dispatching
+      // stays paused meanwhile, every action after it was dead too, with nothing on
+      // screen to say why. Whatever went wrong is answered as the command's error.
+      answer = jsonEncode({'error': '$failure'});
+    }
+    return "window.flutterCallback('$cmd', $answer, '$id');";
   }
 
   Future<Map<String, dynamic>> executeCommand(String cmd, List<dynamic> arguments) async {
