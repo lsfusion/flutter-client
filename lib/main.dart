@@ -417,7 +417,10 @@ class _WebViewPageState extends State<WebViewPage> {
       case 'print':
         return await print(arguments[0], arguments[1], arguments[2], arguments[3]);
       case 'runCommand':
-        return await runCommand(arguments[0]);
+        return await runCommand(
+            arguments[0],
+            arguments.length > 1 ? arguments[1] as String? : null,
+            (arguments.length > 2 ? arguments[2] as bool? : null) ?? true);
       case 'writeToSocket':
         return await writeToSocket(arguments[0], arguments[1], arguments[2], arguments[3]);
       case 'writeToComPort':

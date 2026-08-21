@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ffi';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -307,14 +309,105 @@ Future<Map<String, dynamic>> print(
   }
 }
 
-Future<Map<String, dynamic>> runCommand(String command) async {
-  final result = await Process.run(command, List.empty());
+// A command line, not an executable: `echo hi` has no echo.exe to find, and
+// Process.run without runInShell looks for exactly that and throws. The web-agent
+// hands the whole line to a shell, so do the same - runInShell is cmd /c on Windows
+// and /bin/sh -c elsewhere.
+// One thing the web-agent still does better on Windows: dart:io escapes the line as
+// a process argument, so a double quote inside it reaches cmd.exe as \" and a quoted
+// path (cmd /c copy "a b.txt" c) is not understood. There is no dart:io call that
+// passes a raw command line, and every way around it - a temporary .cmd, indirection
+// through an environment variable - trades the quotes for something else that breaks.
+Future<Map<String, dynamic>> runCommand(
+  String command,
+  String? directory,
+  bool wait,
+) async {
+  if (!wait) {
+    // nothing is waited for, so there is no exit code to judge and no output to
+    // report: a null result is what the server side reads as "left alone", the
+    // same as the desktop client's runCmd, which returns null without wait
+    await Process.start(
+      command,
+      List.empty(),
+      runInShell: true,
+      workingDirectory: directory,
+      mode: ProcessStartMode.detached,
+    );
+    return {'result': null};
+  }
+
+  final result = await Process.run(
+    command,
+    List.empty(),
+    runInShell: true,
+    workingDirectory: directory,
+    // raw bytes: the decoding is ours to do, see _decodeOutput
+    stdoutEncoding: null,
+    stderrEncoding: null,
+  );
   return {
-    'cmdOut': result.stdout.toString().trim(),
-    'cmdErr': result.stderr.toString().trim(),
+    'cmdOut': (await _decodeOutput(result.stdout as List<int>)).trim(),
+    'cmdErr': (await _decodeOutput(result.stderr as List<int>)).trim(),
     'exitValue': result.exitCode,
   };
 }
+
+// A command's output comes back in the console (OEM) code page, and Dart's
+// systemEncoding decodes the ANSI one instead - Cp1251 where the console is Cp866 -
+// turning every non-ASCII character into noise; for a command that fails, that noise
+// is the error message the user gets to read. Windows itself is asked to decode, so
+// a console that is 850 or 852 reads as well as a 866 one, while the desktop client,
+// which hardcodes cp866, only ever gets the latter right.
+Future<String> _decodeOutput(List<int> bytes) async {
+  if (!Platform.isWindows || bytes.isEmpty) return systemEncoding.decode(bytes);
+  final codePage = await _consoleCodePage;
+  final source = malloc<Uint8>(bytes.length);
+  source.asTypedList(bytes.length).setAll(0, bytes);
+  try {
+    final length = _multiByteToWideChar(
+        codePage, 0, source, bytes.length, nullptr, 0);
+    if (length <= 0) return systemEncoding.decode(bytes);
+    final target = malloc<Uint16>(length);
+    try {
+      _multiByteToWideChar(codePage, 0, source, bytes.length, target, length);
+      // what MultiByteToWideChar writes is UTF-16, which is what a Dart string is
+      return String.fromCharCodes(target.asTypedList(length));
+    } finally {
+      malloc.free(target);
+    }
+  } finally {
+    malloc.free(source);
+  }
+}
+
+// Asked the same way the web-agent asks, so both answer alike whatever the machine:
+// chcp run through a shell reports the code page of a child exactly like the ones our
+// commands run in, which neither GetOEMCP nor the calling console's own page is bound
+// to match. Lazy and kept, so it costs one process for the life of the client.
+final Future<int> _consoleCodePage = () async {
+  try {
+    final chcp = await Process.run('chcp', const [], runInShell: true, stdoutEncoding: null);
+    // "Active code page: 866", localized elsewhere and sometimes ending in a full
+    // stop - only the number is worth reading
+    final number = RegExp(r'(\d+)\D*$')
+        .firstMatch(String.fromCharCodes(chcp.stdout as List<int>).trim());
+    if (number != null) return int.parse(number.group(1)!);
+  } catch (_) {
+    // an unanswered chcp
+  }
+  return 866; // the guess of last resort
+}();
+
+// opened lazily, so nothing here is touched on a platform without a kernel32
+final DynamicLibrary _kernel32 = DynamicLibrary.open('kernel32.dll');
+
+final int Function(int, int, Pointer<Uint8>, int, Pointer<Uint16>, int)
+    _multiByteToWideChar = _kernel32.lookupFunction<
+        Int32 Function(
+            Uint32, Uint32, Pointer<Uint8>, Int32, Pointer<Uint16>, Int32),
+        int Function(int, int, Pointer<Uint8>, int, Pointer<Uint16>, int)>(
+    'MultiByteToWideChar');
 
 Future<Map<String, dynamic>> writeToSocket(
   String host,
