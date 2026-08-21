@@ -47,7 +47,7 @@ Future<Map<String, dynamic>> sendTCP(
 
     return {'result': base64Encode(resultBytes)};
   } catch (e) {
-    return {'result': base64Encode(utf8.encode(e.toString()))};
+    return {'error': '$e'};
   }
 }
 
@@ -63,7 +63,7 @@ Future<Map<String, dynamic>> sendUDP(
 
     return {'result': null};
   } catch (e) {
-    return {'result': base64Encode(utf8.encode(e.toString()))};
+    return {'error': '$e'};
   }
 }
 
@@ -222,17 +222,13 @@ Future<Map<String, dynamic>> writeFile(String url, String path,
 
       final response = await request.close();
       if (response.statusCode != 200) {
-        return {
-          'result': base64Encode(
-            utf8.encode('HTTP error: ${response.statusCode}'),
-          ),
-        };
+        return {'error': 'HTTP error: ${response.statusCode}'};
       }
       bytes = await consolidateHttpClientResponseBytes(response);
     }
 
     if (bytes.isEmpty) {
-      return {'result': base64Encode(utf8.encode('Wrote 0 bytes'))};
+      return {'error': 'Wrote 0 bytes'};
     }
 
     final file = File(path);
@@ -240,7 +236,7 @@ Future<Map<String, dynamic>> writeFile(String url, String path,
 
     return {'result': null};
   } catch (e) {
-    return {'result': base64Encode(utf8.encode('Exception: $e'))};
+    return {'error': 'Error writing file: $e'};
   }
 }
 
@@ -343,7 +339,7 @@ Future<Map<String, dynamic>> writeToSocket(
         encoding = latin1;
         break;
       default:
-        return {'result': 'Unsupported charset: $charset'};
+        return {'error': 'Unsupported charset: $charset'};
     }
 
     socket.add(encoding.encode(text));
@@ -353,7 +349,7 @@ Future<Map<String, dynamic>> writeToSocket(
     return {'result': null};
 
   } catch (e) {
-      return {'result': 'Socket error: $e'};
+    return {'error': '$e'};
   }
 }
 
