@@ -322,32 +322,33 @@ Future<Map<String, dynamic>> writeToSocket(
   String text,
   String charset,
 ) async {
+  Encoding encoding;
+
+  // settled before connecting: a charset we cannot encode used to open a socket and
+  // walk away from it, while the web-agent turns the request down without connecting
+  switch (charset.toLowerCase()) {
+    case 'utf8':
+    case 'utf-8':
+      encoding = utf8;
+      break;
+    case 'ascii':
+      encoding = ascii;
+      break;
+    case 'latin1':
+    case 'iso-8859-1':
+      encoding = latin1;
+      break;
+    default:
+      return {'error': 'Unsupported charset: $charset'};
+  }
+
   try {
     final socket = await Socket.connect(host, port);
-    Encoding encoding;
-
-    switch (charset.toLowerCase()) {
-      case 'utf8':
-      case 'utf-8':
-        encoding = utf8;
-        break;
-      case 'ascii':
-        encoding = ascii;
-        break;
-      case 'latin1':
-      case 'iso-8859-1':
-        encoding = latin1;
-        break;
-      default:
-        return {'error': 'Unsupported charset: $charset'};
-    }
-
     socket.add(encoding.encode(text));
     await socket.flush();
     await socket.close();
-    
-    return {'result': null};
 
+    return {'result': null};
   } catch (e) {
     return {'error': '$e'};
   }
