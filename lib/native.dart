@@ -202,8 +202,47 @@ class FileInfo {
   };
 }
 
+// the extensions WriteUtils appends by merging documents rather than bytes
+const _mergedFormats = ['xls', 'xlsx', 'docx', 'pdf'];
+
+// writeAsBytes in append mode does not serialize with itself. Measured over CDP:
+// two writeFile commands dispatched in the same turn left only the second one's
+// bytes - 'AAA' then 'BBB' gave 'BBB', not 'AAABBB'. The writes are queued so
+// each one starts after the one before it has finished.
+Future<void> _writes = Future<void>.value();
+
+// Appending is concatenation. Onto an existing xls/xlsx/docx/pdf the desktop client
+// merges documents instead, with POI and PDFBox, and this client has neither - so
+// those it refuses rather than corrupt. A file that is not there yet is simply
+// created, for any type, the way WriteUtils does; anything else is concatenated.
+// Same rule as the web-agent's, and like it the check runs inside the queue - two
+// appends arriving together would otherwise both find no file and both concatenate.
+Future<Map<String, dynamic>> _writeBytes(
+    String path, Uint8List bytes, bool append) {
+  final write = _writes.then((_) async {
+    final file = File(path);
+    if (append) {
+      final dot = path.lastIndexOf('.');
+      final extension = dot < 0 ? '' : path.substring(dot + 1).toLowerCase();
+      if (_mergedFormats.contains(extension) && await file.exists()) {
+        return {
+          'error': 'APPEND to an existing $extension file is supported only in '
+              'the desktop client'
+        };
+      }
+    }
+    await file.writeAsBytes(bytes,
+        mode: append ? FileMode.append : FileMode.write);
+    return {'result': null};
+  });
+  // a failed write must not poison the queue for the writes behind it; its
+  // caller still gets the error through the future it is awaiting
+  _writes = write.then((_) {}, onError: (_) {});
+  return write;
+}
+
 Future<Map<String, dynamic>> writeFile(String url, String path,
-    [String? fileData]) async {
+    [String? fileData, bool append = false]) async {
   try {
     Uint8List bytes;
     if (fileData != null) {
@@ -233,10 +272,7 @@ Future<Map<String, dynamic>> writeFile(String url, String path,
       return {'error': 'Wrote 0 bytes'};
     }
 
-    final file = File(path);
-    await file.writeAsBytes(bytes);
-
-    return {'result': null};
+    return await _writeBytes(path, bytes, append);
   } catch (e) {
     return {'error': 'Error writing file: $e'};
   }

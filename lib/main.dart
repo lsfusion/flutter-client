@@ -410,8 +410,11 @@ class _WebViewPageState extends State<WebViewPage> {
       case 'listFiles':
         return await listFiles(arguments[0], arguments[1]);
       case 'writeFile':
-        return await writeFile(arguments[0], arguments[1],
-            arguments.length > 2 ? arguments[2] as String? : null);
+        return await writeFile(
+            arguments[0],
+            arguments[1],
+            arguments.length > 2 ? arguments[2] as String? : null,
+            (arguments.length > 3 ? arguments[3] as bool? : null) ?? false);
       case 'getAvailablePrinters':
         return await getAvailablePrinters();
       case 'print':
