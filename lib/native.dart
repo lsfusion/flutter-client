@@ -143,6 +143,16 @@ Future<Map<String, dynamic>> copyFile(
   String destinationPath,
 ) async {
   try {
+    // copy reports success for a file copied onto itself; FileUtils.copyFile
+    // refuses it, on canonical paths compared inside commons-io.
+    // A destination that is not there cannot be the same file, and identical()
+    // throws on it, so it is asked only once the destination is known to exist
+    if (await File(destinationPath).exists() &&
+        await FileSystemEntity.identical(sourcePath, destinationPath)) {
+      return {
+        'result': "Source '$sourcePath' and destination '$destinationPath' are the same"
+      };
+    }
     final sourceFile = File(sourcePath);
     await sourceFile.copy(destinationPath);
     return {'result': null};
@@ -154,29 +164,47 @@ Future<Map<String, dynamic>> copyFile(
 Future<Map<String, dynamic>> listFiles(String source, bool recursive) async {
   final List<FileInfo> results = [];
 
-  Future<void> listDir(Directory dir) async {
+  // the desktop client (FileUtils.listFilesFile) names each entry relative to the
+  // listed directory, and the logic reading fileName() joins that name back onto
+  // the directory - so build it up from the entry names as the walk goes down
+  Future<void> listDir(Directory dir, String prefix) async {
     await for (var entity in dir.list(recursive: false, followLinks: false)) {
       final stat = await entity.stat();
+      // dir.list() gives back the directory's own path with the separator and the
+      // entry name appended - except where that path already ended with one, which
+      // on Windows may be either kind
+      final tail = entity.path.substring(dir.path.length);
+      final name = tail.startsWith('/') || tail.startsWith(Platform.pathSeparator)
+          ? tail.substring(1)
+          : tail;
+      final relative =
+          prefix.isEmpty ? name : '$prefix${Platform.pathSeparator}$name';
 
-      final info = FileInfo(
-        path: entity.path,
+      results.add(FileInfo(
+        path: relative,
         isDirectory: stat.type == FileSystemEntityType.directory,
         modifiedDateTime: stat.modified,
-        fileSize: stat.type == FileSystemEntityType.file ? stat.size : 0,
-      );
+        // the desktop client asks File.length() for every entry alike, and for a
+        // directory that is not always zero - 4096 on ext4, and on NTFS as soon as
+        // it outgrows its resident MFT record
+        fileSize: stat.size,
+      ));
 
-      results.add(info);
-
-      if (recursive && stat.type == FileSystemEntityType.directory) {
-        await listDir(Directory(entity.path));
+      // the entity, not the stat: stat resolves a symlink, and descending into one
+      // lists its target twice and never returns on a cycle. Files.walk, which the
+      // agent walks with, does not follow links either
+      if (recursive && entity is Directory) {
+        await listDir(entity, relative);
       }
     }
   }
 
   final dir = Directory(source);
-  if (await dir.exists()) {
-    await listDir(dir);
+  // a missing directory is an error, not an empty listing
+  if (!await dir.exists()) {
+    return {'error': "Path '$source' not found"};
   }
+  await listDir(dir, '');
 
   return {'result': results.map((e) => e.toJson()).toList()};
 }
@@ -195,7 +223,7 @@ class FileInfo {
   });
 
   Map<String, dynamic> toJson() => {
-    'path': path.replaceAll(r'\', r'\\'),
+    'path': path,
     'isDirectory': isDirectory,
     'modifiedDateTime': modifiedDateTime.toIso8601String(),
     'fileSize': fileSize,
