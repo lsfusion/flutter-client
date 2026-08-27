@@ -211,6 +211,21 @@ const _mergedFormats = ['xls', 'xlsx', 'docx', 'pdf'];
 // each one starts after the one before it has finished.
 Future<void> _writes = Future<void>.value();
 
+// A relative path goes into the user's Downloads, which is what the desktop client
+// makes of one (WriteUtils.writeFile) - and it does so for writing alone: every other
+// command of ours works off the process's own directory. Only where there is such a
+// folder, though: on Android and iOS a relative path stays in the sandbox.
+String _clientPath(String path) {
+  final home = Platform.isWindows
+      ? Platform.environment['USERPROFILE']
+      : (Platform.isLinux || Platform.isMacOS ? Platform.environment['HOME'] : null);
+  final absolute = Platform.isWindows
+      ? RegExp(r'^([a-zA-Z]:[\\/]|\\\\)').hasMatch(path)
+      : path.startsWith('/');
+  if (home == null || home.isEmpty || absolute) return path;
+  return '$home${Platform.pathSeparator}Downloads${Platform.pathSeparator}$path';
+}
+
 // Appending is concatenation. Onto an existing xls/xlsx/docx/pdf the desktop client
 // merges documents instead, with POI and PDFBox, and this client has neither - so
 // those it refuses rather than corrupt. A file that is not there yet is simply
@@ -268,11 +283,7 @@ Future<Map<String, dynamic>> writeFile(String url, String path,
       bytes = await consolidateHttpClientResponseBytes(response);
     }
 
-    if (bytes.isEmpty) {
-      return {'error': 'Wrote 0 bytes'};
-    }
-
-    return await _writeBytes(path, bytes, append);
+    return await _writeBytes(_clientPath(path), bytes, append);
   } catch (e) {
     return {'error': 'Error writing file: $e'};
   }
