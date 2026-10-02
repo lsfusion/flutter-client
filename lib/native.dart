@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart' show CookieManager, WebUri;
 import 'package:printing/printing.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:flutter_libserialport/flutter_libserialport.dart';
@@ -262,6 +263,35 @@ String _clientPath(String path) {
 // appends arriving together would otherwise both find no file and both concatenate.
 Future<Map<String, dynamic>> _writeBytes(
     String path, Uint8List bytes, bool append) {
+  return _queueWrite(path, append, (file, mode) => file.writeAsBytes(bytes, mode: mode));
+}
+
+// the same for a downloaded file : it is streamed to the disk, since it can be
+// bigger than the memory (backups and heap dumps are gigabytes)
+Future<Map<String, dynamic>> _writeStream(
+    String path, Stream<List<int>> stream, bool append) {
+  return _queueWrite(path, append, (file, mode) async {
+    if (append) {
+      // an append can't be undone, there the error is all the caller gets
+      await stream.pipe(file.openWrite(mode: mode));
+      return;
+    }
+    // written next to the file and moved over it only when the whole file is
+    // downloaded : a cut download must not destroy the file being replaced (or
+    // leave a truncated one that looks whole)
+    final part = File('${file.path}.part');
+    try {
+      await stream.pipe(part.openWrite());
+      await part.rename(file.path);
+    } catch (e) {
+      if (await part.exists()) await part.delete();
+      rethrow;
+    }
+  });
+}
+
+Future<Map<String, dynamic>> _queueWrite(String path, bool append,
+    Future<void> Function(File file, FileMode mode) doWrite) {
   final write = _writes.then((_) async {
     final file = File(path);
     if (append) {
@@ -274,8 +304,7 @@ Future<Map<String, dynamic>> _writeBytes(
         };
       }
     }
-    await file.writeAsBytes(bytes,
-        mode: append ? FileMode.append : FileMode.write);
+    await doWrite(file, append ? FileMode.append : FileMode.write);
     return {'result': null};
   });
   // a failed write must not poison the queue for the writes behind it; its
@@ -284,34 +313,48 @@ Future<Map<String, dynamic>> _writeBytes(
   return write;
 }
 
+// the cookies the webview has for the url - the same ones _openFileExternally sends
+Future<String?> _sessionCookie(String url) async {
+  try {
+    final cookies = await CookieManager.instance().getCookies(url: WebUri(url));
+    return cookies.isEmpty ? null : cookies.map((c) => '${c.name}=${c.value}').join('; ');
+  } catch (e) { // there is no CookieManager on the Linux / CEF path
+    debugPrint('no webview cookies for $url: $e');
+    return null;
+  }
+}
+
 Future<Map<String, dynamic>> writeFile(String url, String path,
     [String? fileData, bool append = false]) async {
   try {
-    Uint8List bytes;
+    // WRITE CLIENT delivers the file content as base64 in `fileData` (see
+    // ClientActionToGwtConverter.convertAction). Write those bytes directly,
+    // the same way the web-agent does.
     if (fileData != null) {
-      // WRITE CLIENT delivers the file content as base64 in `fileData` (the web
-      // client always fills it — see ClientActionToGwtConverter.convertAction).
-      // Write those bytes directly, the same way the web-agent does. Downloading
-      // `url` instead reaches the app server WITHOUT the webview's session
-      // cookie, so it 401s and no file is created — and because WRITE is a
-      // fire-and-forget action, that failure was silent.
-      bytes = base64Decode(fileData);
-    } else {
-      final uri = Uri.parse(url);
-      final httpClient = HttpClient()..autoUncompress = true;
+      return await _writeBytes(_clientPath(path), base64Decode(fileData), append);
+    }
 
+    // A file that stays on the server (backups, heap dumps - WriteServerFileClientAction)
+    // comes without bytes, only with the `url` of the web server, which answers 401
+    // without the webview's session cookie. So the cookie is sent along
+    final uri = Uri.parse(url);
+    final httpClient = HttpClient()..autoUncompress = true;
+    try {
       final request = await httpClient.getUrl(uri);
       request.followRedirects = true;
       request.headers.set('User-Agent', 'Mozilla/5.0 (compatible; Dart)');
+      final cookie = await _sessionCookie(url);
+      if (cookie != null) request.headers.set(HttpHeaders.cookieHeader, cookie);
 
       final response = await request.close();
       if (response.statusCode != 200) {
         return {'error': 'HTTP error: ${response.statusCode}'};
       }
-      bytes = await consolidateHttpClientResponseBytes(response);
+      return await _writeStream(_clientPath(path), response, append);
+    } finally {
+      // force : a response that was not read (an error status, a refused append) would hold the connection
+      httpClient.close(force: true);
     }
-
-    return await _writeBytes(_clientPath(path), bytes, append);
   } catch (e) {
     return {'error': 'Error writing file: $e'};
   }
